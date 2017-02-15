@@ -3,7 +3,7 @@ Installation
 
 It is highly recommended that you begin by installing `AstroConda <http://astroconda.readthedocs.io/en/latest/installation.html#install-astroconda>`_ and follow these `instructions <https://gist.github.com/nmearl/c2e0a06d2d5a3715baf7d9486780dc08>`_ (just the "Installation Procedure" section) to install the Pandeia engine and the required reference files.
 
-Once you Pandeia is set up, the following command will install this package:
+Once Pandeia is set up, the following command will install this package:
 
 ``pip install git+git://github.com/kvangorkom/pandeia-coronagraphy.git``
 
