@@ -1,3 +1,9 @@
+
+.. image:: screenshot.png
+   :width: 60%
+   :align: center
+   :alt: Simulated NIRCam 210R scene with KLIP reference-subtraction 
+
 Installation
 =====
 
