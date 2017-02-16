@@ -1,10 +1,6 @@
 Pandeia-Coronagraphy
 =====
 
-.. image:: screenshot1.png
-   :width: 60%
-   :align: center
-   :alt: NIRCam 210R scene
 .. image:: screenshot.png
    :width: 60%
    :align: center
