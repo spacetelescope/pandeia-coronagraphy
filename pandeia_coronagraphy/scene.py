@@ -1,17 +1,4 @@
-import pandeia
-from pandeia.engine.instrument_factory import InstrumentFactory
-from pandeia.engine.perform_calculation import perform_calculation as pandeia_calculation
-
-def _make_dither_weights(self):
-    '''
-    Hack to circumvent reference subtraction in pandeia,
-    which is currently incorrect.
-
-    REMOVE WHEN FIXED
-    '''
-    self.dither_weights = [1,0,0] #Pandeia: [1,-1,0]
-
-pandeia.engine.strategy.Coronagraphy._make_dither_weights = _make_dither_weights
+from engine import perform_calculation
 
 import json
 import itertools
@@ -44,27 +31,6 @@ def calculate_batch(calcfiles,nprocesses=None):
     results = pool.map(perform_calculation,calcfiles)
     pool.close()
     pool.join()
-    return results
-
-def perform_calculation(calcfile):
-    '''
-    Manually decorate pandeia.engine.perform_calculation to circumvent
-    pandeia's tendency to modify the calcfile during the calculation.
-    '''
-    calcfile = deepcopy(calcfile)
-    results = pandeia_calculation(calcfile)
-
-    #get fullwell for instrument + detector combo
-    #instrument = InstrumentFactory(config=calcfile['configuration'])
-    #fullwell = instrument.get_detector_pars()['fullwell']
-
-    #recompute saturated pixels and populate saturation and detector images appropriately
-    #image = results['2d']['detector'] * results['information']['exposure_specification']['ramp_exposure_time']
-    #saturation = np.zeros_like(image)
-    #saturation[image > fullwell] = 1
-    #results['2d']['saturation'] = saturation
-    #results['2d']['detector'][saturation.astype(bool)] = np.nan
-
     return results
 
 def create_SGD(calcfile,stepsize=20.e-3):
