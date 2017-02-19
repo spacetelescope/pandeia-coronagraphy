@@ -72,7 +72,7 @@ def offset_scene(scene,x,y):
 def plot_scene(scene,title,newfig=True):
     if newfig:
         plt.figure(figsize=(5,5))
-    plt.subplot(111,polar=True)
+        plt.subplot(111,polar=True)
     for s in scene:
         r, theta = cart_to_polar([s['position']['x_offset'],s['position']['y_offset']])
         plt.plot(np.deg2rad(theta),r,lw=0,marker='o',ms=10,label=s['id'])
