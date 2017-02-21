@@ -1,1 +1,4 @@
-import scene, analysis, transformations, engine
+import scene
+import analysis
+import transformations
+import engine

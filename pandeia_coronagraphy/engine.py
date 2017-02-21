@@ -1,9 +1,13 @@
+from copy import deepcopy
+
 import pandeia
 from pandeia.engine.instrument_factory import InstrumentFactory
+from pandeia.engine.psf_library import PSFLibrary
 from pandeia.engine.perform_calculation import perform_calculation as pandeia_calculation
 from pandeia.engine.astro_spectrum import * 
+import webbpsf
 
-from copy import deepcopy
+from . import transformations
 
 # Pandeia defaults to ~200 wavelength samples for imaging
 # This is slow and unlikely to significantly improve the
@@ -12,6 +16,9 @@ from copy import deepcopy
 # and translates to a time savings of about 10.
 # Leaving it at None sets it to Pandeia's default.
 wave_sampling = None
+# Avoid Pandeia's precomputed PSFs and recompute in WebbPSF as needed?
+on_the_fly_PSFs = False
+pandeia_get_psf = PSFLibrary.get_psf
 
 def perform_calculation(calcfile):
     '''
@@ -20,6 +27,11 @@ def perform_calculation(calcfile):
 
     Updates to the saturation computation could go here as well.
     '''
+    if on_the_fly_PSFs:
+        pandeia.engine.psf_library.PSFLibrary.get_psf = get_psf_on_the_fly
+    else:
+        pandeia.engine.psf_library.PSFLibrary.get_psf = pandeia_get_psf
+
     calcfile = deepcopy(calcfile)
     results = pandeia_calculation(calcfile)
 
@@ -35,6 +47,108 @@ def perform_calculation(calcfile):
     #results['2d']['detector'][saturation.astype(bool)] = np.nan
 
     return results
+
+def get_psf_on_the_fly(self, wave, instrument, aperture_name, source_offset=(0, 0)):
+    #Make the instrument and determine the mode
+    if instrument.upper() == 'NIRCAM':
+        ins = webbpsf.NIRCam()
+    elif instrument.upper() == 'MIRI':
+        ins = webbpsf.MIRI()
+    else:
+        raise ValueError('Only NIRCam and MIRI are supported instruments!')
+    image_mask, pupil_mask, fov_pixels, trim_fov_pixels, pix_scl = parse_aperture(aperture_name)
+    ins.image_mask = image_mask
+    ins.pupil_mask = pupil_mask
+    
+    #get offset
+    ins.options['source_offset_r'] = source_offset[0]
+    ins.options['source_offset_theta'] = source_offset[1]
+    ins.options['output_mode'] = 'oversampled'
+    ins.options['parity'] = 'odd'
+
+    psf_result = calc_psf_and_center(ins, wave, source_offset[0], source_offset[1], 3,
+                            pix_scl, fov_pixels, trim_fov_pixels=trim_fov_pixels)
+    
+    pix_scl = psf_result[0].header['PIXELSCL']
+    upsamp = psf_result[0].header['OVERSAMP']
+    diff_limit = psf_result[0].header['DIFFLMT']
+    psf = psf_result[0].data
+
+    psf = {
+        'int': psf,
+        'wave': wave,
+        'pix_scl': pix_scl,
+        'diff_limit': diff_limit,
+        'upsamp': upsamp,
+        'instrument': instrument,
+        'aperture_name': aperture_name,
+        'source_offset': source_offset
+    }
+
+    return psf
+
+def parse_aperture(aperture_name):
+    '''
+    Return [image mask, pupil mask, fov_pixels, trim_fov_pixels, pixelscale]
+
+    ADD MIRI PARAMETERS HERE
+    '''
+    
+    aperture_keys = ['mask210r','mask335r','mask430r','masklwb','maskswb',
+                     'fqpm1065','fqpm1140','fqpm1550','lyot2300']
+    aperture = [a for a in aperture_keys if a in aperture_name][0]
+
+    nc = webbpsf.NIRCam()
+    miri = webbpsf.MIRI()
+
+    aperture_dict = {
+        'mask210r' : ['MASK210R','CIRCLYOT', 101, None, nc._pixelscale_short],
+        'mask335r' : ['MASK335R','CIRCLYOT', 101, None, nc._pixelscale_long],
+        'mask430r' : ['MASK430R','CIRCLYOT', 101, None, nc._pixelscale_long],
+        'masklwb' : ['MASKLWB','WEDGELYOT', 351, 101, nc._pixelscale_long],
+        'maskswb' : ['MASKSWB','WEDGELYOT', 351, 101, nc._pixelscale_short],
+        'fqpm1065' : ['FQPM1065','MASKFQPM', 81, None, miri.pixelscale],
+        'fqpm1140' : ['FQPM1140','MASKFQPM', 81, None, miri.pixelscale],
+        'fqpm1550' : ['FQPM1550','MASKFQPM', 81, None, miri.pixelscale],
+        'lyot2300' : ['LYOT2300','MASKLYOT', 81, None, miri.pixelscale]
+        }
+  
+    return aperture_dict[aperture]
+
+def calc_psf_and_center(ins, wave, offset_r, offset_theta, oversample, pix_scale, fov_pixels, trim_fov_pixels=None):
+    '''
+    Following the treatment in pandeia_data/dev/make_psf.py to handle
+    off-center PSFs for use as a kernel in later convolutions.
+    '''
+
+    if offset_r > 0.:
+        #roll back to center
+        dx = int(np.rint( offset_r * np.sin(np.deg2rad(offset_theta)) / pix_scale ))
+        dy = int(np.rint( offset_r * np.cos(np.deg2rad(offset_theta)) / pix_scale ))
+        dmax = np.max([np.abs(dx), np.abs(dy)])
+
+        # pandeia forces offset to nearest integer subsampled pixel.
+        # At the risk of having subpixel offsets in the recentering,
+        # I'm not sure we want to do this in order to capture 
+        # small-scale spatial variations properly.
+        #ins.options['source_offset_r'] = np.sqrt(dx**2 + dy**2) * pix_scale
+
+        psf_result = ins.calcPSF(monochromatic=wave*1e-6, oversample=oversample, fov_pixels=fov_pixels + 2*dmax)
+
+        image = psf_result[0].data
+        image = np.roll(image, dx * oversample, axis=1)
+        image = np.roll(image, -dy * oversample, axis=0)
+        image = image[dmax * oversample:(fov_pixels + dmax) * oversample,
+                      dmax * oversample:(fov_pixels + dmax) * oversample]
+        #trim if requested
+        if trim_fov_pixels is not None:
+            trim_amount = int(oversample * (fov_pixels - trim_fov_pixels) / 2)
+            image = image[trim_amount:-trim_amount, trim_amount:-trim_amount]
+        psf_result[0].data = image
+    else:
+        psf_result = ins.calcPSF(monochromatic=wave*1e-6, oversample=oversample, fov_pixels=fov_pixels)
+
+    return psf_result
 
 def ConvolvedSceneCubeinit(self, scene, instrument, background=None, psf_library=None, webapp=False):
     '''
