@@ -1,4 +1,6 @@
 from copy import deepcopy
+import json
+import multiprocessing as mp
 
 import pandeia
 from pandeia.engine.instrument_factory import InstrumentFactory
@@ -32,6 +34,11 @@ def load_calculation(filename):
 def save_calculation(calcfile,filename):
     with open(filename,'w+') as f:
         json.dump(calcfile,f,indent=2)
+
+def save_to_fits(array,filename):
+    hdu = fits.PrimaryHDU(array)
+    hdulist = fits.HDUList([hdu])
+    hdulist.writeto(filename)
 
 def calculate_batch(calcfiles,nprocesses=None):
     if nprocesses is None:
