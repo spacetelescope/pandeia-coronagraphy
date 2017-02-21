@@ -10,28 +10,10 @@ from astropy.io import fits
 from transformations import cart_to_polar, rotate
 from engine import perform_calculation
 
-def load_calculation(filename):
-    with open(filename) as f:
-        calcfile = json.load(f)
-    return calcfile
-
-def save_calculation(calcfile,filename):
-    with open(filename,'w+') as f:
-        json.dump(calcfile,f,indent=2)
-
 def save_to_fits(array,filename):
     hdu = fits.PrimaryHDU(array)
     hdulist = fits.HDUList([hdu])
     hdulist.writeto(filename)
-
-def calculate_batch(calcfiles,nprocesses=None):
-    if nprocesses is None:
-        nprocesses = mp.cpu_count()
-    pool = mp.Pool(processes=nprocesses)
-    results = pool.map(perform_calculation,calcfiles)
-    pool.close()
-    pool.join()
-    return results
 
 def create_SGD(calcfile,stepsize=20.e-3):
     '''
