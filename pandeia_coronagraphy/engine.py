@@ -1,4 +1,6 @@
 from copy import deepcopy
+import json
+import multiprocessing as mp
 
 import pandeia
 from pandeia.engine.instrument_factory import InstrumentFactory
@@ -23,6 +25,29 @@ wave_sampling = None
 # Avoid Pandeia's precomputed PSFs and recompute in WebbPSF as needed?
 on_the_fly_PSFs = False
 pandeia_get_psf = PSFLibrary.get_psf
+
+def load_calculation(filename):
+    with open(filename) as f:
+        calcfile = json.load(f)
+    return calcfile
+
+def save_calculation(calcfile,filename):
+    with open(filename,'w+') as f:
+        json.dump(calcfile,f,indent=2)
+
+def save_to_fits(array,filename):
+    hdu = fits.PrimaryHDU(array)
+    hdulist = fits.HDUList([hdu])
+    hdulist.writeto(filename)
+
+def calculate_batch(calcfiles,nprocesses=None):
+    if nprocesses is None:
+        nprocesses = mp.cpu_count()
+    pool = mp.Pool(processes=nprocesses)
+    results = pool.map(perform_calculation,calcfiles)
+    pool.close()
+    pool.join()
+    return results
 
 def perform_calculation(calcfile):
     '''
