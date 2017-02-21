@@ -94,18 +94,23 @@ def parse_aperture(aperture_name):
     ADD MIRI PARAMETERS HERE
     '''
     
-    aperture_keys = ['mask210r','mask335r','mask430r','masklwb','maskswb']
+    aperture_keys = ['mask210r','mask335r','mask430r','masklwb','maskswb',
+                     'fqpm1065','fqpm1140','fqpm1550','lyot2300']
     aperture = [a for a in aperture_keys if a in aperture_name][0]
 
     nc = webbpsf.NIRCam()
     miri = webbpsf.MIRI()
 
     aperture_dict = {
-        'mask210r' : ['MASK210R','CIRCLYOT',101, None, nc._pixelscale_short],
-        'mask335r' : ['MASK335R','CIRCLYOT',101, None, nc._pixelscale_long],
-        'mask430r' : ['MASK430R','CIRCLYOT',101, None, nc._pixelscale_long],
-        'masklwb' : ['MASKLWB','WEDGELYOT',351, 101, nc._pixelscale_long],
-        'maskswb' : ['MASKSWB','WEDGELYOT',351, 101, nc._pixelscale_short]
+        'mask210r' : ['MASK210R','CIRCLYOT', 101, None, nc._pixelscale_short],
+        'mask335r' : ['MASK335R','CIRCLYOT', 101, None, nc._pixelscale_long],
+        'mask430r' : ['MASK430R','CIRCLYOT', 101, None, nc._pixelscale_long],
+        'masklwb' : ['MASKLWB','WEDGELYOT', 351, 101, nc._pixelscale_long],
+        'maskswb' : ['MASKSWB','WEDGELYOT', 351, 101, nc._pixelscale_short],
+        'fqpm1065' : ['FQPM1065','MASKFQPM', 81, None, miri.pixelscale],
+        'fqpm1140' : ['FQPM1140','MASKFQPM', 81, None, miri.pixelscale],
+        'fqpm1550' : ['FQPM1550','MASKFQPM', 81, None, miri.pixelscale],
+        'lyot2300' : ['LYOT2300','MASKLYOT', 81, None, miri.pixelscale]
         }
   
     return aperture_dict[aperture]
