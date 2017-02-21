@@ -5,7 +5,11 @@ from pandeia.engine.instrument_factory import InstrumentFactory
 from pandeia.engine.psf_library import PSFLibrary
 from pandeia.engine.perform_calculation import perform_calculation as pandeia_calculation
 from pandeia.engine.astro_spectrum import * 
-import webbpsf
+
+try:
+    import webbpsf
+except ImportError:
+    pass
 
 from . import transformations
 
