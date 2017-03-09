@@ -5,8 +5,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from astropy.io import fits
 
-from transformations import cart_to_polar, rotate
-from engine import perform_calculation
+from .transformations import cart_to_polar, rotate
+from .engine import perform_calculation
 
 def create_SGD(calcfile,stepsize=20.e-3):
     '''
