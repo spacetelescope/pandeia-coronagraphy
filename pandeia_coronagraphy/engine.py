@@ -26,6 +26,22 @@ wave_sampling = None
 on_the_fly_PSFs = False
 pandeia_get_psf = PSFLibrary.get_psf
 
+on_the_fly_webbpsf_options = dict() # Extra options for configuring the PSF calculation ad hoc.
+                                    # note some options are overridden in get_psf_on_the_fly()
+
+
+def get_template(filename):
+    """ Look up a template filename. Assumes template files are stored in a fixed location relative
+    to this pandeia_coronagraphy source code. Still pretty brittle but better than hard-coding
+    paths in the notebooks.
+    """
+    import os
+    thisdir = os.path.dirname(os.path.abspath(__file__))
+    outfile = os.path.join(thisdir,"../templates", filename)
+    outfile = os.path.abspath(outfile)
+    return outfile
+
+
 def load_calculation(filename):
     with open(filename) as f:
         calcfile = json.load(f)
@@ -81,6 +97,11 @@ def get_psf_on_the_fly(self, wave, instrument, aperture_name, source_offset=(0, 
     #Make the instrument and determine the mode
     if instrument.upper() == 'NIRCAM':
         ins = webbpsf.NIRCam()
+
+        if wave > 2.5:
+            # need to toggle to LW detector.
+            ins.detector='A5'
+            ins.pixelscale = ins._pixelscale_long
     elif instrument.upper() == 'MIRI':
         ins = webbpsf.MIRI()
     else:
@@ -88,7 +109,11 @@ def get_psf_on_the_fly(self, wave, instrument, aperture_name, source_offset=(0, 
     image_mask, pupil_mask, fov_pixels, trim_fov_pixels, pix_scl = parse_aperture(aperture_name)
     ins.image_mask = image_mask
     ins.pupil_mask = pupil_mask
-    
+
+    # Apply any extra options if specified by the user:
+    for key in on_the_fly_webbpsf_options:
+        ins.options[key] = on_the_fly_webbpsf_options[key]
+
     #get offset
     ins.options['source_offset_r'] = source_offset[0]
     ins.options['source_offset_theta'] = source_offset[1]
@@ -158,11 +183,11 @@ def calc_psf_and_center(ins, wave, offset_r, offset_theta, oversample, pix_scale
 
         # pandeia forces offset to nearest integer subsampled pixel.
         # At the risk of having subpixel offsets in the recentering,
-        # I'm not sure we want to do this in order to capture 
+        # I'm not sure we want to do this in order to capture
         # small-scale spatial variations properly.
         #ins.options['source_offset_r'] = np.sqrt(dx**2 + dy**2) * pix_scale
 
-        psf_result = ins.calcPSF(monochromatic=wave*1e-6, oversample=oversample, fov_pixels=fov_pixels + 2*dmax)
+        psf_result = ins.calc_psf(monochromatic=wave*1e-6, oversample=oversample, fov_pixels=fov_pixels + 2*dmax)
 
         image = psf_result[0].data
         image = np.roll(image, dx * oversample, axis=1)
@@ -175,7 +200,7 @@ def calc_psf_and_center(ins, wave, offset_r, offset_theta, oversample, pix_scale
             image = image[trim_amount:-trim_amount, trim_amount:-trim_amount]
         psf_result[0].data = image
     else:
-        psf_result = ins.calcPSF(monochromatic=wave*1e-6, oversample=oversample, fov_pixels=fov_pixels)
+        psf_result = ins.calc_psf(monochromatic=wave*1e-6, oversample=oversample, fov_pixels=fov_pixels)
 
     return psf_result
 
