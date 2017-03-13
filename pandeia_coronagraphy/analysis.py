@@ -1,6 +1,6 @@
 import numpy as np
 
-from transformations import align_fourierLSQ, fourier_imshift
+from .transformations import align_fourierLSQ, fourier_imshift
 
 def get_klip_basis(R, cutoff):
     '''
