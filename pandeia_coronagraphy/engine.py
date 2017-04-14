@@ -28,6 +28,7 @@ pandeia_get_psf = PSFLibrary.get_psf
 
 on_the_fly_webbpsf_options = dict() # Extra options for configuring the PSF calculation ad hoc.
                                     # note some options are overridden in get_psf_on_the_fly()
+on_the_fly_webbpsf_opd = None       # Allow overriding the default OPD selection when computing PSFs on the fly
 
 
 def get_template(filename):
@@ -113,6 +114,9 @@ def get_psf_on_the_fly(self, wave, instrument, aperture_name, source_offset=(0, 
     # Apply any extra options if specified by the user:
     for key in on_the_fly_webbpsf_options:
         ins.options[key] = on_the_fly_webbpsf_options[key]
+
+    if on_the_fly_webbpsf_opd is not None:
+        ins.pupilopd = on_the_fly_webbpsf_opd
 
     #get offset
     ins.options['source_offset_r'] = source_offset[0]
