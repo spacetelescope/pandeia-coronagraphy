@@ -28,7 +28,7 @@ Alternatively, follow these step-by-step instructions:
 
 4. Activate this environment with ``source activate astroconda``. (NB: Conda is only compatible with a BASH shell.)
 
-5. Install the Pandeia engine with this command: ``pip install pandeia.engine``. (You *should* already have the Pysynphot installed package at this point. If you don't, install it with ``pip install pysypnphot``. You can find your installed packages with ``conda list``.)
+5. Install the Pandeia engine with this command: ``pip install pandeia.engine``. (You *should* already have the Pysynphot package installed at this point. If you don't, install it with ``pip install pysypnphot``. You can generate a list of installed packages with ``conda list``.)
 
 6. Download and unzip the `Pandeia data files <http://ssb.stsci.edu/pandeia/engine/1.0/pandeia_data-1.0.tar.gz>`_ and the PySynphot data files (ftp://archive.stsci.edu/pub/hst/pysynphot/). See `Installing PySynphot Data Files`_ for more detail on setting up the PySynphot data files.
 
