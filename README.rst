@@ -30,7 +30,7 @@ Alternatively, follow these step-by-step instructions:
 
 5. Install the Pandeia engine with this command: ``pip install pandeia.engine``. (You *should* already have the Pysynphot installed package at this point. If you don't, install it with ``pip install pysypnphot``. You can find your installed packages with ``conda list``.)
 
-6. Download and unzip the `Pandeia data files <http://ssb.stsci.edu/pandeia/engine/1.0/pandeia_data-1.0.tar.gz>`_ and the PySynphot data files (ftp://archive.stsci.edu/pub/hst/pysynphot/). The entire PySynphot data file collection is quite large; you may be able to get away with only downloading the Pysynphot Phoenix Models (ftp://archive.stsci.edu/pub/hst/pysynphot/synphot5.tar.gz).
+6. Download and unzip the `Pandeia data files <http://ssb.stsci.edu/pandeia/engine/1.0/pandeia_data-1.0.tar.gz>`_ and the PySynphot data files (ftp://archive.stsci.edu/pub/hst/pysynphot/). See `Installing PySynphot Data Files`_ for more detail on setting up the PySynphot data files.
 
 7. Add the following lines to your ~/.bashrc file (and ``source`` it after modifying):
 
@@ -48,4 +48,17 @@ Alternatively, follow these step-by-step instructions:
 Getting Started
 ----
 
-Once installation is complete, take a look at the provided `Jupyter notebooks <https://github.com/kvangorkom/pandeia-coronagraphy/tree/master/notebooks>`_ for examples of constructing a scene, setting instrument properties, running the Pandeia engine, and performing some basic post-processing. You can find a more complete description of the engine inputs `here <https://gist.github.com/nmearl/2465fe054a71ddaadba349398fa3e146#file-engine_input-md>`_ and outputs `here <https://gist.github.com/nmearl/2465fe054a71ddaadba349398fa3e146#file-engine_output-md>`_.
+Once installation is complete, take a look at the provided `Jupyter notebooks <https://github.com/kvangorkom/pandeia-coronagraphy/tree/master/notebooks>`_ for examples of constructing a scene, setting instrument properties, running the Pandeia engine, and performing some basic post-processing.
+
+You can find a more complete description of the engine inputs `here <https://gist.github.com/nmearl/2465fe054a71ddaadba349398fa3e146#file-engine_input-md>`_ and outputs `here <https://gist.github.com/nmearl/2465fe054a71ddaadba349398fa3e146#file-engine_output-md>`_.
+
+Example input templates for the Pandeia engine are provided `here https://github.com/kvangorkom/pandeia-coronagraphy/tree/master/templates`_.
+
+
+Installing PySynphot Data Files
+----
+
+ The entire PySynphot data file collection is quite large, and the PySynphot package expects a particular directory structure. If you're on the STScI network, you can skip this download and point the ``PYSYN_CDBS`` environment variable to the CDBS directory on central store instead (``/grp/hst/cdbs``). Otherwise, two (hopefully) helpful tips for installing the reference files locally:
+
+ 1. Rather than download every package, you may be able to get away with downloading only the Pysynphot Phoenix Models (ftp://archive.stsci.edu/pub/hst/pysynphot/synphot5.tar.gz).
+ 2. The .tar files will unpack to a directory structure that looks something like ``grp/hst/cdbs/etc``. You'll need to consolidate the multiple structures into a single directory structure under ``cdbs``. When setting up your environment variables in Step 7 (under `Installation`_), you'll want to point to the ``cdbs`` directory directly.
