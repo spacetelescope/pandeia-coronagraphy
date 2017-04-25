@@ -30,6 +30,9 @@ pandeia_get_psf = PSFLibrary.get_psf
 on_the_fly_webbpsf_options = dict() # Extra options for configuring the PSF calculation ad hoc.
                                     # note some options are overridden in get_psf_on_the_fly()
 on_the_fly_webbpsf_opd = None       # Allow overriding the default OPD selection when computing PSFs on the fly
+on_the_fly_cache_maxsize = 256      # Number of monochromatic PSFs stored in an LRU cache
+                                    # Should speed up calculations that involve modifying things
+                                    # like exposure time and don't actually require calculating new PSFs. 
 
 def get_template(filename):
     """ Look up a template filename. Assumes template files are stored in a fixed location relative
@@ -101,7 +104,7 @@ def on_the_fly_psf_wrapper(self,*args,**kwargs):
     '''
     return get_psf_on_the_fly(*args,**kwargs)
 
-@lru_cache(maxsize=256)
+@lru_cache(maxsize=on_the_fly_cache_maxsize)
 def get_psf_on_the_fly(wave, instrument, aperture_name, source_offset=(0, 0)):
     #Make the instrument and determine the mode
     if instrument.upper() == 'NIRCAM':
