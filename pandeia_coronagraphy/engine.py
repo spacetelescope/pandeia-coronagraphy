@@ -1,6 +1,7 @@
 from copy import deepcopy
 import json
 import multiprocessing as mp
+from functools32 import lru_cache
 
 import pandeia
 from pandeia.engine.instrument_factory import InstrumentFactory
@@ -29,7 +30,6 @@ pandeia_get_psf = PSFLibrary.get_psf
 on_the_fly_webbpsf_options = dict() # Extra options for configuring the PSF calculation ad hoc.
                                     # note some options are overridden in get_psf_on_the_fly()
 on_the_fly_webbpsf_opd = None       # Allow overriding the default OPD selection when computing PSFs on the fly
-
 
 def get_template(filename):
     """ Look up a template filename. Assumes template files are stored in a fixed location relative
@@ -74,7 +74,7 @@ def perform_calculation(calcfile):
     Updates to the saturation computation could go here as well.
     '''
     if on_the_fly_PSFs:
-        pandeia.engine.psf_library.PSFLibrary.get_psf = get_psf_on_the_fly
+        pandeia.engine.psf_library.PSFLibrary.get_psf = on_the_fly_psf_wrapper
     else:
         pandeia.engine.psf_library.PSFLibrary.get_psf = pandeia_get_psf
 
@@ -94,7 +94,15 @@ def perform_calculation(calcfile):
 
     return results
 
-def get_psf_on_the_fly(self, wave, instrument, aperture_name, source_offset=(0, 0)):
+def on_the_fly_psf_wrapper(self,*args,**kwargs):
+    '''
+    An additional layer to allow the use of lru_cache on
+    on-the-fly PSFs (which requires hashable inputs)
+    '''
+    return get_psf_on_the_fly(*args,**kwargs)
+
+@lru_cache(maxsize=256)
+def get_psf_on_the_fly(wave, instrument, aperture_name, source_offset=(0, 0)):
     #Make the instrument and determine the mode
     if instrument.upper() == 'NIRCAM':
         ins = webbpsf.NIRCam()
