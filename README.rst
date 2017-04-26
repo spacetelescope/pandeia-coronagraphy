@@ -43,7 +43,7 @@ Alternatively, follow these step-by-step instructions:
 
  ``pip install git+git://github.com/kvangorkom/pandeia-coronagraphy.git``
 
-9. (Optional) Install `WebbPSF <https://pythonhosted.org/webbpsf/index.html>`_ with ``conda install webbpsf``. This is required only if you are interested in using higher-fidelity PSFs in your calculations; otherwise, the Pandeia engine relies on interpolations of a bundled library of precomputed PSFs. This functionality is documented `here <https://github.com/kvangorkom/pandeia-coronagraphy/blob/master/notebooks/nircam_on_the_fly_PSFs.ipynb>`_.
+9. (Optional) Install `WebbPSF <https://pythonhosted.org/webbpsf/index.html>`_ with ``conda install webbpsf``. This is required only if you are interested in using higher-fidelity PSFs in your calculations; otherwise, the Pandeia engine relies on interpolations of a bundled library of precomputed PSFs. This functionality is documented `here <https://github.com/kvangorkom/pandeia-coronagraphy/blob/master/notebooks/miri_photon_noise_and_contrast.ipynb>`_ and `here <https://github.com/kvangorkom/pandeia-coronagraphy/blob/master/notebooks/nircam_small_grid_dither.ipynb>`_.
 
 Installing PySynphot Data Files
 ----
