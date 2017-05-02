@@ -20,11 +20,15 @@ def klip_projection(target,reflib,truncation=10):
     proj = targflat.dot(Z.T)
     return Z.T.dot(proj).reshape(target.shape)
 
-def register_to_target(reference_image,target_image,rescale_and_recenter=True):
+def register_to_target(reference_image,target_image,mask=None,rescale_and_recenter=True,return_fit=False):
     centered_ref = reference_image - np.nanmean(reference_image)
-    offx, offy, scale = align_fourierLSQ(centered_ref,target_image)
-    if rescale_and_recenter == True:
+    offx, offy, scale = align_fourierLSQ(centered_ref,target_image,mask)
+    if rescale_and_recenter:
         registered_ref = fourier_imshift(centered_ref,offx,offy) * scale
     else:
         registered_ref = fourier_imshift(reference_image,offx,offy)
-    return registered_ref
+
+    if return_fit:
+        return registered_ref, offx, offy, scale
+    else:
+        return registered_ref
