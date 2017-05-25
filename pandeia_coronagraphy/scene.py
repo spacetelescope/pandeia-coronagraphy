@@ -8,13 +8,65 @@ from astropy.io import fits
 from .transformations import cart_to_polar, rotate
 from .engine import perform_calculation
 
-def create_SGD(calcfile,stepsize=20.e-3):
+def create_SGD(calcfile,stepsize=20.e-3, pattern_name=None):
     '''
+    Create small grid dither pointing set. There are two
+    ways to specify dither patterns:
+
+        stepsize : floating point value for a 3x3 grid.
+
+        pattern_name : string name of a pattern corresponding to
+                  one of the named dither patterns in APT.
+
+    If you specify pattern_name, then stepsize is ignored.
+
+    See https://jwst-docs-stage.stsci.edu/display/JTI/NIRCam+Small-Grid+Dithers
+    for information on the available dither patterns and their names.
     '''
     #loop to set offsets
-    steps = [-stepsize,0.,stepsize]
+
+    if pattern_name is not None:
+        pattern_name = pattern_name.upper()
+        if pattern_name == "5-POINT-BOX":
+            pointings = [(0,0),
+                         (0.015, 0.015),
+                         (-0.015, 0.015),
+                         (-0.015, -0.015),
+                         (0.015, -0.015)]
+        elif pattern_name == "5-POINT-DIAMOND":
+            pointings = [(0, 0),
+                         (0, 0.02),
+                         (0, -0.02),
+                         (+0.02, 0),
+                         (-0.02, 0)]
+        elif pattern_name == '9-POINT-CIRCLE':
+            pointings = [( 0,      0),
+                         ( 0,      0.02),
+                         (-0.015,  0.015),
+                         (-0.02,   0),
+                         (-0.015, -0.015),
+                         ( 0.000, -0.02),
+                         ( 0.015, -0.015),
+                         ( 0.020,  0.0),
+                         ( 0.015, -0.015)]
+        elif pattern_name == "3-POINT-BAR":
+            pointings = [(0,0),
+                         (0.0,  0.015),
+                         (0.0, -0.015)]
+        elif pattern_name == "5-POINT-BAR":
+            pointings = [(0,0),
+                         (0.0,  0.020),
+                         (0.0,  0.010),
+                         (0.0, -0.010),
+                         (0.0, -0.020)]
+        else:
+            raise ValueError("Unknown pattern_name value; check your input matches exactly an allowed SGD pattern in APT.")
+    else:
+        steps = [-stepsize,0.,stepsize]
+        pointings = itertools.product(steps,steps)
     sgds = []
-    for sx,sy in itertools.product(steps,steps):
+
+    for sx,sy in pointings:
         curcalc = deepcopy(calcfile)
         errx, erry = get_fsm_error()
         curcalc['scene'][0]['position']['x_offset'] = sx + errx
