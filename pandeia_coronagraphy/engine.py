@@ -1,7 +1,14 @@
 from copy import deepcopy
 import json
 import multiprocessing as mp
-from functools32 import lru_cache
+import sys
+
+
+if sys.version_info > (3, 2):
+    from functools import lru_cache
+else:
+    from functools32 import lru_cache
+
 
 import pandeia
 from pandeia.engine.instrument_factory import InstrumentFactory
