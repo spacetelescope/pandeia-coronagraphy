@@ -1,19 +1,23 @@
 from copy import deepcopy
+from glob import glob
 import json
 import multiprocessing as mp
+import os
+import pkg_resources
 import sys
 
+#if sys.version_info > (3, 2):
+#    from functools import lru_cache
+#else:
+#    from functools32 import lru_cache
 
-if sys.version_info > (3, 2):
-    from functools import lru_cache
-else:
-    from functools32 import lru_cache
-
+import numpy as np
 
 import pandeia
 from pandeia.engine.instrument_factory import InstrumentFactory
 from pandeia.engine.psf_library import PSFLibrary
 from pandeia.engine.perform_calculation import perform_calculation as pandeia_calculation
+from pandeia.engine.observation import Observation
 from pandeia.engine.astro_spectrum import * 
 
 try:
@@ -22,6 +26,7 @@ except ImportError:
     pass
 
 from . import transformations
+from . import templates
 
 # Pandeia defaults to ~200 wavelength samples for imaging
 # This is slow and unlikely to significantly improve the
@@ -37,21 +42,26 @@ pandeia_get_psf = PSFLibrary.get_psf
 on_the_fly_webbpsf_options = dict() # Extra options for configuring the PSF calculation ad hoc.
                                     # note some options are overridden in get_psf_on_the_fly()
 on_the_fly_webbpsf_opd = None       # Allow overriding the default OPD selection when computing PSFs on the fly
-on_the_fly_cache_maxsize = 256      # Number of monochromatic PSFs stored in an LRU cache
+#on_the_fly_cache_maxsize = 256     # Number of monochromatic PSFs stored in an LRU cache
                                     # Should speed up calculations that involve modifying things
                                     # like exposure time and don't actually require calculating new PSFs. 
+# By default, the pandeia engine uses a fixed seed.
+# This has undesirable results for many coronagraphy
+# applications.
+pandeia_seed = Observation.get_random_seed
+pandeia_fixed_seed = False
 
 def get_template(filename):
-    """ Look up a template filename. Assumes template files are stored in a fixed location relative
-    to this pandeia_coronagraphy source code. Still pretty brittle but better than hard-coding
-    paths in the notebooks.
-    """
-    import os
-    thisdir = os.path.dirname(os.path.abspath(__file__))
-    outfile = os.path.join(thisdir,"../templates", filename)
-    outfile = os.path.abspath(outfile)
-    return outfile
+    ''' Look up a template filename.
+    '''
+    return pkg_resources.resource_filename(templates.__name__,filename)
 
+def list_templates():
+    '''
+    List all bundled template calculation files.
+    '''
+    templatewildcard = pkg_resources.resource_filename(templates.__name__,'*.json')
+    return [os.path.basename(fname) for fname in glob(templatewildcard)]
 
 def load_calculation(filename):
     with open(filename) as f:
@@ -74,6 +84,9 @@ def calculate_batch(calcfiles,nprocesses=None):
     results = pool.map(perform_calculation,calcfiles)
     pool.close()
     pool.join()
+
+    np.random.seed(None) # reset Pandeia seed
+
     return results
 
 def perform_calculation(calcfile):
@@ -87,20 +100,17 @@ def perform_calculation(calcfile):
         pandeia.engine.psf_library.PSFLibrary.get_psf = on_the_fly_psf_wrapper
     else:
         pandeia.engine.psf_library.PSFLibrary.get_psf = pandeia_get_psf
+    if pandeia_fixed_seed:
+        pandeia.engine.observation.Observation.get_random_seed = pandeia_seed
+    else:
+        pandeia.engine.observation.Observation.get_random_seed = random_seed
 
     calcfile = deepcopy(calcfile)
     results = pandeia_calculation(calcfile)
 
-    #get fullwell for instrument + detector combo
-    #instrument = InstrumentFactory(config=calcfile['configuration'])
-    #fullwell = instrument.get_detector_pars()['fullwell']
-
-    #recompute saturated pixels and populate saturation and detector images appropriately
-    #image = results['2d']['detector'] * results['information']['exposure_specification']['ramp_exposure_time']
-    #saturation = np.zeros_like(image)
-    #saturation[image > fullwell] = 1
-    #results['2d']['saturation'] = saturation
-    #results['2d']['detector'][saturation.astype(bool)] = np.nan
+    # Reset the fixed seed state set by the pandeia engine
+    # to avoid unexpected results elsewhere
+    np.random.seed(None) 
 
     return results
 
@@ -111,7 +121,7 @@ def on_the_fly_psf_wrapper(self,*args,**kwargs):
     '''
     return get_psf_on_the_fly(*args,**kwargs)
 
-@lru_cache(maxsize=on_the_fly_cache_maxsize)
+#@lru_cache(maxsize=on_the_fly_cache_maxsize)
 def get_psf_on_the_fly(wave, instrument, aperture_name, source_offset=(0, 0)):
     #Make the instrument and determine the mode
     if instrument.upper() == 'NIRCAM':
@@ -393,3 +403,13 @@ def _make_dither_weights(self):
     
 pandeia.engine.strategy.Coronagraphy._make_dither_weights = _make_dither_weights
 pandeia.engine.strategy.Coronagraphy._create_weight_matrix = pandeia.engine.strategy.ImagingApPhot._create_weight_matrix
+
+def random_seed(self):
+    '''
+    The pandeia engine sets a fixed seed of 42.
+    Circumvent that here.
+    '''
+    #np.random.seed(None) # Reset the seed if already set
+    #return np.random.randint(0, 2**32 - 1) # Find a new one
+    return None
+
