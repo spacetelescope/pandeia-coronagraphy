@@ -96,13 +96,13 @@ def fourier_imshift(image,xshift,yshift):
         xshift : float
             Pixel value by which to shift image in the x direction
         yshift : float
-            Pixel value by which to shift image in the x direction
+            Pixel value by which to shift image in the y direction
 
     Returns:
         offset : nd array
             Shifted image
 
     '''
-    offset = fourier_shift( np.fft.fftn(image), (yshift,xshift) )
+    offset = fourier_shift( np.fft.fftn(image), (-yshift,xshift) )
     offset = np.fft.ifftn(offset).real
     return offset
