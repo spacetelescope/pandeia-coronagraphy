@@ -111,7 +111,7 @@ def on_the_fly_psf_wrapper(self,*args,**kwargs):
     '''
     return get_psf_on_the_fly(*args,**kwargs)
 
-@lru_cache(maxsize=on_the_fly_cache_maxsize)
+#@lru_cache(maxsize=on_the_fly_cache_maxsize)
 def get_psf_on_the_fly(wave, instrument, aperture_name, source_offset=(0, 0)):
     #Make the instrument and determine the mode
     if instrument.upper() == 'NIRCAM':
