@@ -3,10 +3,10 @@ import json
 import multiprocessing as mp
 import sys
 
-if sys.version_info > (3, 2):
-    from functools import lru_cache
-else:
-    from functools32 import lru_cache
+#if sys.version_info > (3, 2):
+#    from functools import lru_cache
+#else:
+#    from functools32 import lru_cache
 
 import numpy as np
 
