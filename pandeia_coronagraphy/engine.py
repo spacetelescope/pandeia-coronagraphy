@@ -350,9 +350,10 @@ def ConvolvedSceneCubeinit(self, scene, instrument, background=None, psf_library
     """
     if projection_type in ('spec', 'slitless', 'multiorder'):
         wave_pix = instrument.get_wave_pix()
-        if wave_pix.size < self.wave.size:
-            self.wave = wave_pix[np.where(np.logical_and(wave_pix >= wrange['wmin'],
+        wave_pix_trim = wave_pix[np.where(np.logical_and(wave_pix >= wrange['wmin'],
                                                          wave_pix <= wrange['wmax']))]
+        if wave_pix_trim.size < self.wave.size:
+            self.wave = wave_pix_trim
 
     """
     There is no inherently optimal sampling for imaging modes, but we resample here to
@@ -386,6 +387,7 @@ def ConvolvedSceneCubeinit(self, scene, instrument, background=None, psf_library
 
     self.grid, self.aperture_list, self.flux_cube_list, self.flux_plus_bg_list = \
         self.create_flux_cube(background=self.background)
+        
     self.dist = self.grid.dist()
     
 pandeia.engine.astro_spectrum.ConvolvedSceneCube.__init__ = ConvolvedSceneCubeinit
@@ -412,4 +414,7 @@ def random_seed(self):
     #np.random.seed(None) # Reset the seed if already set
     #return np.random.randint(0, 2**32 - 1) # Find a new one
     return None
+
+
+
 
