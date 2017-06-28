@@ -22,11 +22,12 @@ def klip_projection(target,reflib,truncation=10):
 
 def register_to_target(reference_image,target_image,mask=None,rescale_and_recenter=True,return_fit=False):
     centered_ref = reference_image - np.nanmean(reference_image)
-    offx, offy, scale = align_fourierLSQ(centered_ref,target_image,mask)
+    centered_targ = target_image - np.nanmean(target_image)
+    offx, offy, scale = align_fourierLSQ(centered_targ,centered_ref,mask)
     if rescale_and_recenter:
-        registered_ref = fourier_imshift(centered_ref,offx,offy) * scale
+        registered_ref = fourier_imshift(centered_ref,-offx,-offy) / scale # * scale
     else:
-        registered_ref = fourier_imshift(reference_image,offx,offy)
+        registered_ref = fourier_imshift(reference_image,-offx,-offy)
 
     if return_fit:
         return registered_ref, offx, offy, scale
