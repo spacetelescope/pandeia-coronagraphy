@@ -61,7 +61,7 @@ def list_templates():
     List all bundled template calculation files.
     '''
     templatewildcard = pkg_resources.resource_filename(templates.__name__,'*.json')
-    return glob(templatewildcard)
+    return [os.path.basename(fname) for fname in glob(templatewildcard)]
 
 def load_calculation(filename):
     with open(filename) as f:
