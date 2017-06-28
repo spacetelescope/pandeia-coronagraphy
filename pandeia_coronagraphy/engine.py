@@ -387,7 +387,7 @@ def ConvolvedSceneCubeinit(self, scene, instrument, background=None, psf_library
 
     self.grid, self.aperture_list, self.flux_cube_list, self.flux_plus_bg_list = \
         self.create_flux_cube(background=self.background)
-        
+
     self.dist = self.grid.dist()
     
 pandeia.engine.astro_spectrum.ConvolvedSceneCube.__init__ = ConvolvedSceneCubeinit
@@ -414,7 +414,3 @@ def random_seed(self):
     #np.random.seed(None) # Reset the seed if already set
     #return np.random.randint(0, 2**32 - 1) # Find a new one
     return None
-
-
-
-
