@@ -54,7 +54,7 @@ def register_to_target(reference_image,target_image,mask=None,rescale_reference=
     if rescale_reference:
         registered_ref = fourier_imshift(centered_ref,-offx,-offy) / scale # * scale
     else:
-        registered_ref = fourier_imshift(reference_image,-offx,-offy)
+        registered_ref = fourier_imshift(centered_ref,-offx,-offy)
 
     if return_fit:
         return registered_ref, offx, offy, scale
