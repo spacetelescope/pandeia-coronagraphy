@@ -1,6 +1,9 @@
 from copy import deepcopy
+from glob import glob
 import json
 import multiprocessing as mp
+import os
+import pkg_resources
 import sys
 
 #if sys.version_info > (3, 2):
@@ -23,6 +26,7 @@ except ImportError:
     pass
 
 from . import transformations
+from . import templates
 
 # Pandeia defaults to ~200 wavelength samples for imaging
 # This is slow and unlikely to significantly improve the
@@ -48,16 +52,16 @@ pandeia_seed = Observation.get_random_seed
 pandeia_fixed_seed = False
 
 def get_template(filename):
-    """ Look up a template filename. Assumes template files are stored in a fixed location relative
-    to this pandeia_coronagraphy source code. Still pretty brittle but better than hard-coding
-    paths in the notebooks.
-    """
-    import os
-    thisdir = os.path.dirname(os.path.abspath(__file__))
-    outfile = os.path.join(thisdir,"../templates", filename)
-    outfile = os.path.abspath(outfile)
-    return outfile
+    ''' Look up a template filename.
+    '''
+    return pkg_resources.resource_filename(templates.__name__,filename)
 
+def list_templates():
+    '''
+    List all bundled template calculation files.
+    '''
+    templatewildcard = pkg_resources.resource_filename(templates.__name__,'*.json')
+    return glob(templatewildcard)
 
 def load_calculation(filename):
     with open(filename) as f:
