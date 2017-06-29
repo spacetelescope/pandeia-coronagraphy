@@ -60,4 +60,4 @@ Once installation is complete, take a look at the provided `Jupyter notebooks <h
 
 You can find a more complete description of the engine inputs `here <https://gist.github.com/nmearl/2465fe054a71ddaadba349398fa3e146#file-engine_input-md>`_ and outputs `here <https://gist.github.com/nmearl/2465fe054a71ddaadba349398fa3e146#file-engine_output-md>`_.
 
-Example input templates for the Pandeia engine are provided `here <https://github.com/kvangorkom/pandeia-coronagraphy/tree/master/templates>`_.
+Example input templates for the Pandeia engine are provided `here <https://github.com/kvangorkom/pandeia-coronagraphy/tree/master/pandeia_coronagraphy/templates>`_.
