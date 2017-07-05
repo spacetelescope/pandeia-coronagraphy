@@ -1,0 +1,87 @@
+{
+  "configuration": {
+    "scene_size": 6,
+    "instrument": {
+      "instrument": "fgs",
+      "aperture": "imager",
+      "mode": "imaging",
+      "filter": "fgsfull",
+      "disperser": null
+    },
+    "max_scene_size": 10.0,
+    "dynamic_scene": true,
+    "detector": {
+      "subarray": "full",
+      "nint": 2,
+      "readmode": "nisrapid",
+      "ngroup": 5,
+      "nexp": 1
+    }
+  },
+  "background": "medium",
+  "calculation": {
+    "noise": {
+      "rn_correlation": true,
+      "crs": true,
+      "ffnoise": true,
+      "darkcurrent": true,
+      "readnoise": true
+    },
+    "effects": {
+      "ipc": true,
+      "background": true,
+      "saturation": true
+    }
+  },
+  "strategy": {
+    "background_subtraction": true,
+    "display_string": "Imaging Aperture Photometry",
+    "method": "imagingapphot",
+    "units": "arcsec",
+    "sky_annulus": [
+      0.24,
+      0.32
+    ],
+    "target_source": 1,
+    "target_type": "",
+    "target_xy": [
+      0.0,
+      0.0
+    ],
+    "aperture_size": 0.08
+  },
+  "scene": [
+    {
+      "id": 1,
+      "position": {
+        "orientation": 0.0,
+        "x_offset": 0.0,
+        "y_offset": 0.0
+      },
+      "shape": {
+        "geometry": "point"
+      },
+      "spectrum": {
+        "normalization": {
+          "bandpass": "bessel,k",
+          "type": "photsys",
+          "norm_flux": 16,
+          "norm_fluxunit": "vegamag"
+        },
+        "extinction": {
+          "bandpass": "v",
+          "law": "mw_rv_31",
+          "unit": "mag",
+          "value": 0.0
+        },
+        "lines": [],
+        "name": "generic source",
+        "redshift": 0.0,
+        "sed": {
+          "sed_type": "phoenix",
+          "key": "g2v"
+        }
+      }
+    }
+  ]
+}
