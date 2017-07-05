@@ -48,7 +48,7 @@ def create_SGD(calcfile,stepsize=20.e-3, pattern_name=None):
                          ( 0.000, -0.02),
                          ( 0.015, -0.015),
                          ( 0.020,  0.0),
-                         ( 0.015, -0.015)]
+                         ( 0.015,  0.015)]
         elif pattern_name == "3-POINT-BAR":
             pointings = [(0,0),
                          (0.0,  0.015),
