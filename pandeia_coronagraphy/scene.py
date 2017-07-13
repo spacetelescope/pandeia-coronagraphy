@@ -66,11 +66,16 @@ def create_SGD(calcfile,stepsize=20.e-3, pattern_name=None):
         pointings = itertools.product(steps,steps)
     sgds = []
 
-    for sx,sy in pointings:
+    for i, (sx, sy) in enumerate(pointings):
         curcalc = deepcopy(calcfile)
-        errx, erry = get_fsm_error()
-        curcalc['scene'][0]['position']['x_offset'] = sx + errx
-        curcalc['scene'][0]['position']['y_offset'] = sy + erry
+        if i > 0:
+            errx, erry = get_fsm_error()
+            offset_x = sx + errx
+            offset_y = sy + erry
+        else:
+            offset_x = sx
+            offset_y = sy
+        offset_scene(curcalc['scene'], offset_x, offset_y)
         sgds.append(curcalc)
     return sgds
 
