@@ -5,6 +5,7 @@ import multiprocessing as mp
 import os
 import pkg_resources
 import sys
+import warnings
 
 #if sys.version_info > (3, 2):
 #    from functools import lru_cache
@@ -89,7 +90,10 @@ def perform_calculation(calcfile):
         pandeia.engine.observation.Observation.get_random_seed = random_seed
 
     calcfile = deepcopy(calcfile)
-    results = pandeia_calculation(calcfile)
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', category = np.VisibleDeprecationWarning) # Suppress float-indexing warnings
+        results = pandeia_calculation(calcfile)
 
     # Reset the fixed seed state set by the pandeia engine
     # to avoid unexpected results elsewhere

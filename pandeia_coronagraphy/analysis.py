@@ -1,4 +1,7 @@
+from itertools import product
+
 import numpy as np
+from scipy.ndimage import convolve
 
 from .transformations import align_fourierLSQ, fourier_imshift
 
@@ -60,3 +63,154 @@ def register_to_target(reference_image,target_image,mask=None,rescale_reference=
         return registered_ref, offx, offy, scale
     else:
         return registered_ref
+
+def compute_contrast(data_stack, offaxis_image, aperture):
+    ''' Compute the contrast curve for a stack of data via
+    a covariance matrix approach.
+
+    Parameters:
+        data_stack : nd array
+            Z x Y x X stack of images
+        offaxis_image : nd array
+            Y x X image of an unocculted source.
+        aperture : nd array
+            2D image of desired aperture in which
+            to compute correlated noise. Should be
+            the same dimensions of each image in the
+            data stack.
+
+    Returns:
+        bins : nd array
+            Radial separation (in pixels) at which
+            the contrast curve is evaluated
+        profile : nd array
+            The contrast at the bin radii
+    '''
+    image_dim = data_stack[0].shape
+
+    # Get the covariance
+    cov_matrix = covariance_matrix(data_stack)
+
+    # Get the aperture matrix
+    ap_matrix = aperture_matrix(aperture)
+
+    # Find correlated noise within the aperture
+    noise = noise_map(cov_matrix, ap_matrix, image_dim)
+
+    # Convolve off-axis source with aperture and take max
+    convolved_offaxis = convolve(offaxis_image, aperture, mode='constant')
+    normalization = convolved_offaxis.max()
+
+    # Compute the radial profile of the noise map
+    bins, profile = radial_profile(noise)
+
+    return bins, profile / normalization
+
+def covariance_matrix(data_stack, mean_subtract=False):
+    '''
+    Given a cube of images, compute the pixel-wise covariance matrix
+
+    Parameters:
+        data_stack : array-like
+            Z x Y x X cube of images, where (X, Y) are image dimensions
+        mean_subtract: bool, opt.
+            Compute the mean centered covariance? By default, we set this
+            to False, since--after many discussions--it's been decided
+            that removing the mean does something similar to removing a
+            reference PSF, which is undesirable for a raw contrast calculation,
+            for example.
+
+    Returns:
+        Y^2 x X^2 covariance matrix.
+    '''
+    nstack = data_stack.shape[0]
+
+    # Flatten (z, y, x) to (y*x, z)
+    flat = data_stack.reshape(nstack, -1).T
+
+    if mean_subtract:
+        mean = np.array([np.mean(flat, axis = 1)] * nstack).T
+        flat -= mean
+
+    covariance = flat.dot(flat.T) / (nstack - 1)
+
+    return covariance
+
+def aperture_matrix(aperture):
+    '''
+    Construct an aperture matrix that mirrors the structure
+    of the covariance matrix. It represents the flattened
+    aperture centered at each pixel position.
+
+    Parameters:
+        aperture : nd array
+            The aperture kernel centered in
+            an array of the desired image.
+    Returns:
+        aperture_matrix : nd array
+            An NxK x NxK array representing the aperture centered at each pixel.
+    '''
+    # Embed the kernel in an oversized array
+    dim = aperture.shape
+    desired = (max(dim) * 2 + 1) / 2
+    add = ((desired - dim[0] // 2,desired - dim[0] // 2),(desired - dim[1] // 2,desired - dim[1] // 2))
+    kernel = np.pad(aperture, add, mode = 'constant')
+    
+    # Loop over every (y, x) pixel shift and record the flattened aperture
+    shape = aperture.shape    
+    aperture_matrix = np.zeros((shape[0] * shape[1], shape[0] * shape[1]))
+    for i, (y, x) in enumerate(product(range(shape[0]), range(shape[1]) )):
+        aperture_matrix[i] = kernel[shape[0] - y : 2 * shape[0] - y,
+                                    shape[1] - x : 2 * shape[1] - x].flatten()
+    return aperture_matrix
+
+def noise_map(covariance_matrix, aperture_matrix, image_dim):
+    ''' From a covariance matrix and the corresponding
+    aperture matrix, return the correlated noise within
+    the aperture at each pixel.
+
+    Parameters:
+        covariance_matrix : nd array
+            NxK x NxK covariance matrix. See analysis.covariance_matrix
+        aperture_matrix : nd array
+            NxK x NxK aperture matrix. See analysis.aperture_matrix
+        image_dim : tuple
+            (N, K) dimensions of original image (and returned noise map)
+
+    Returns:
+        noise : np array
+            N x K array of the standard deviation at each pixel
+    '''
+    noise_matrix = aperture_matrix.dot(covariance_matrix.dot(aperture_matrix.T))
+    noise = np.sqrt(np.diag(noise_matrix).reshape(image_dim))
+    return noise
+
+def radial_profile(image):
+    ''' Find the radial profile of an image.
+
+    Will fail if n_annuli implies a resolution
+    that exceeds the actual image resolution.
+
+    Parameters:
+        image : nd array
+            2D image over which to find profile
+        n_annuli : int
+            Number of annuli to use to compute radial
+            profile
+
+    Returns:
+        radial_bins : nd array
+            Bins (uniform in radial separation) in which
+            mean is computed
+        profile : nd array
+            Mean value of image in each radial bin
+    '''
+    # Compute radial distance from center (in pixels) and discretize
+    indices = np.indices(image.shape)
+    center = np.array(image.shape) / 2.
+    radial = np.sqrt( (indices[0] - center[0])**2 + (indices[1] - center[1])**2 ).astype(int)
+    # Take mean of image within discretized radial points
+    profile = np.bincount(radial.ravel(), image.ravel()) / np.bincount(radial.ravel())
+    # Return unique bins, profile
+    bins = np.unique(radial)
+    return bins, profile
