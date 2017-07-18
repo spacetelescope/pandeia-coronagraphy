@@ -147,7 +147,7 @@ def aperture_matrix(aperture):
             The aperture kernel centered in
             an array of the desired image.
     Returns:
-        aperture_matrix : nd array
+        ap_matrix : nd array
             An NxK x NxK array representing the aperture centered at each pixel.
     '''
     # Embed the kernel in an oversized array
@@ -158,13 +158,13 @@ def aperture_matrix(aperture):
     
     # Loop over every (y, x) pixel shift and record the flattened aperture
     shape = aperture.shape    
-    aperture_matrix = np.zeros((shape[0] * shape[1], shape[0] * shape[1]))
+    ap_matrix = np.zeros((shape[0] * shape[1], shape[0] * shape[1]))
     for i, (y, x) in enumerate(product(range(shape[0]), range(shape[1]) )):
-        aperture_matrix[i] = kernel[shape[0] - y : 2 * shape[0] - y,
+        ap_matrix[i] = kernel[shape[0] - y : 2 * shape[0] - y,
                                     shape[1] - x : 2 * shape[1] - x].flatten()
-    return aperture_matrix
+    return ap_matrix
 
-def noise_map(covariance_matrix, aperture_matrix, image_dim):
+def noise_map(cov_matrix, ap_matrix, image_dim):
     ''' From a covariance matrix and the corresponding
     aperture matrix, return the correlated noise within
     the aperture at each pixel.
@@ -172,7 +172,7 @@ def noise_map(covariance_matrix, aperture_matrix, image_dim):
     Parameters:
         covariance_matrix : nd array
             NxK x NxK covariance matrix. See analysis.covariance_matrix
-        aperture_matrix : nd array
+        ap_matrix : nd array
             NxK x NxK aperture matrix. See analysis.aperture_matrix
         image_dim : tuple
             (N, K) dimensions of original image (and returned noise map)
@@ -181,7 +181,7 @@ def noise_map(covariance_matrix, aperture_matrix, image_dim):
         noise : np array
             N x K array of the standard deviation at each pixel
     '''
-    noise_matrix = aperture_matrix.dot(covariance_matrix.dot(aperture_matrix.T))
+    noise_matrix = ap_matrix.dot(cov_matrix.dot(ap_matrix.T))
     noise = np.sqrt(np.diag(noise_matrix).reshape(image_dim))
     return noise
 
