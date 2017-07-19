@@ -16,7 +16,6 @@ def get_klip_basis(R, cutoff):
     return Z[0:cutoff, :], sv
 
 def klip_projection(target,reflib,truncation=10):
-    #mean center
     refflat = reflib.reshape(reflib.shape[0],-1)
     targflat = target.flatten()
     Z, _ = get_klip_basis(refflat,truncation)
@@ -53,11 +52,11 @@ def register_to_target(reference_image,target_image,mask=None,rescale_reference=
     '''
     centered_ref = reference_image - np.nanmean(reference_image)
     centered_targ = target_image - np.nanmean(target_image)
-    offx, offy, scale = align_fourierLSQ(centered_targ,centered_ref,mask)
+    offx, offy, scale = align_fourierLSQ(centered_targ, centered_ref, mask)
     if rescale_reference:
-        registered_ref = fourier_imshift(centered_ref,-offx,-offy) / scale # * scale
+        registered_ref = fourier_imshift(centered_ref, -offx, -offy) / scale
     else:
-        registered_ref = fourier_imshift(centered_ref,-offx,-offy)
+        registered_ref = fourier_imshift(centered_ref, -offx, -offy)
 
     if return_fit:
         return registered_ref, offx, offy, scale
@@ -121,7 +120,7 @@ def covariance_matrix(data_stack, mean_subtract=False):
             for example.
 
     Returns:
-        Y^2 x X^2 covariance matrix.
+        XxY x XxY covariance matrix.
     '''
     nstack = data_stack.shape[0]
 
@@ -188,20 +187,13 @@ def noise_map(cov_matrix, ap_matrix, image_dim):
 def radial_profile(image):
     ''' Find the radial profile of an image.
 
-    Will fail if n_annuli implies a resolution
-    that exceeds the actual image resolution.
-
     Parameters:
         image : nd array
             2D image over which to find profile
-        n_annuli : int
-            Number of annuli to use to compute radial
-            profile
 
     Returns:
-        radial_bins : nd array
-            Bins (uniform in radial separation) in which
-            mean is computed
+        bins : nd array
+            Bins in which radial mean is computed
         profile : nd array
             Mean value of image in each radial bin
     '''

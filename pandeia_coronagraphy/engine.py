@@ -44,7 +44,7 @@ def list_templates():
     '''
     List all bundled template calculation files.
     '''
-    templatewildcard = pkg_resources.resource_filename(templates.__name__,'*.json')
+    templatewildcard = pkg_resources.resource_filename(templates.__name__, '*.json')
     return [os.path.basename(fname) for fname in glob(templatewildcard)]
 
 def load_calculation(filename):
@@ -53,8 +53,8 @@ def load_calculation(filename):
     return calcfile
 
 def save_calculation(calcfile,filename):
-    with open(filename,'w+') as f:
-        json.dump(calcfile,f,indent=2)
+    with open(filename, 'w+') as f:
+        json.dump(calcfile, f, indent=2)
 
 def save_to_fits(array,filename):
     hdu = fits.PrimaryHDU(array)
@@ -64,8 +64,8 @@ def save_to_fits(array,filename):
 def calculate_batch(calcfiles,nprocesses=None):
     if nprocesses is None:
         nprocesses = mp.cpu_count()
-    pool = mp.Pool(processes=nprocesses)
-    results = pool.map(perform_calculation,calcfiles)
+    pool = mp.Pool(processes = nprocesses)
+    results = pool.map(perform_calculation, calcfiles)
     pool.close()
     pool.join()
 
@@ -163,8 +163,6 @@ def get_psf_on_the_fly(wave, instrument, aperture_name, source_offset=(0, 0)):
 def parse_aperture(aperture_name):
     '''
     Return [image mask, pupil mask, fov_pixels, trim_fov_pixels, pixelscale]
-
-    ADD MIRI PARAMETERS HERE
     '''
     
     aperture_keys = ['mask210r','mask335r','mask430r','masklwb','maskswb',

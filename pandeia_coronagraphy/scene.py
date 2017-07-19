@@ -28,17 +28,17 @@ def create_SGD(calcfile,stepsize=20.e-3, pattern_name=None):
     if pattern_name is not None:
         pattern_name = pattern_name.upper()
         if pattern_name == "5-POINT-BOX":
-            pointings = [(0,0),
-                         (0.015, 0.015),
-                         (-0.015, 0.015),
+            pointings = [(0,       0),
+                         (0.015,   0.015),
+                         (-0.015,  0.015),
                          (-0.015, -0.015),
-                         (0.015, -0.015)]
+                         (0.015,  -0.015)]
         elif pattern_name == "5-POINT-DIAMOND":
-            pointings = [(0, 0),
-                         (0, 0.02),
-                         (0, -0.02),
-                         (+0.02, 0),
-                         (-0.02, 0)]
+            pointings = [(0,      0),
+                         (0,      0.02),
+                         (0,     -0.02),
+                         (+0.02,  0),
+                         (-0.02,  0)]
         elif pattern_name == '9-POINT-CIRCLE':
             pointings = [( 0,      0),
                          ( 0,      0.02),
@@ -50,11 +50,11 @@ def create_SGD(calcfile,stepsize=20.e-3, pattern_name=None):
                          ( 0.020,  0.0),
                          ( 0.015,  0.015)]
         elif pattern_name == "3-POINT-BAR":
-            pointings = [(0,0),
+            pointings = [(0,    0),
                          (0.0,  0.015),
                          (0.0, -0.015)]
         elif pattern_name == "5-POINT-BAR":
-            pointings = [(0,0),
+            pointings = [(0,    0),
                          (0.0,  0.020),
                          (0.0,  0.010),
                          (0.0, -0.010),
@@ -80,7 +80,7 @@ def create_SGD(calcfile,stepsize=20.e-3, pattern_name=None):
     return sgds
 
 def get_ta_error(error=5.0e-3):
-    ''' 7mas 1-sigma/axis error
+    ''' 5mas 1-sigma/axis error (~7mas radial)
     '''
     return np.random.normal(loc=0.,scale=error,size=2)
 
