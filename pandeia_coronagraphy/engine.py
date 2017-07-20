@@ -182,7 +182,8 @@ def parse_aperture(aperture_name):
     
     aperture_keys = ['mask210r','mask335r','mask430r','masklwb','maskswb',
                      'fqpm1065','fqpm1140','fqpm1550','lyot2300']
-    aperture = [a for a in aperture_keys if a in aperture_name][0]
+    assert aperture_name in aperture_keys, \
+        'Aperture {} not recognized! Must be one of {}'.format(aperture_name, aperture_keys)
 
     nc = webbpsf.NIRCam()
     miri = webbpsf.MIRI()
@@ -199,7 +200,7 @@ def parse_aperture(aperture_name):
         'lyot2300' : ['LYOT2300','MASKLYOT', 81, None, miri.pixelscale]
         }
   
-    return aperture_dict[aperture]
+    return aperture_dict[aperture_name]
 
 def calc_psf_and_center(ins, wave, offset_r, offset_theta, oversample, pix_scale, fov_pixels, trim_fov_pixels=None):
     '''
