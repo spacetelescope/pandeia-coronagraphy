@@ -5,6 +5,7 @@ import multiprocessing as mp
 import os
 import pkg_resources
 import sys
+import warnings
 
 #if sys.version_info > (3, 2):
 #    from functools import lru_cache
@@ -16,8 +17,10 @@ import numpy as np
 import pandeia
 from pandeia.engine.instrument_factory import InstrumentFactory
 from pandeia.engine.psf_library import PSFLibrary
+pandeia_get_psf = PSFLibrary.get_psf
 from pandeia.engine.perform_calculation import perform_calculation as pandeia_calculation
 from pandeia.engine.observation import Observation
+pandeia_seed = Observation.get_random_seed
 from pandeia.engine.astro_spectrum import * 
 
 try:
@@ -25,31 +28,12 @@ try:
 except ImportError:
     pass
 
+from .config import EngineConfiguration
 from . import transformations
 from . import templates
 
-# Pandeia defaults to ~200 wavelength samples for imaging
-# This is slow and unlikely to significantly improve the
-# accuracy of coronagraphic performance predictions.
-# Setting wave_sampling to 10-20 should be sufficient,
-# and translates to a time savings of about 10.
-# Leaving it at None sets it to Pandeia's default.
-wave_sampling = None
-# Avoid Pandeia's precomputed PSFs and recompute in WebbPSF as needed?
-on_the_fly_PSFs = False
-pandeia_get_psf = PSFLibrary.get_psf
-
-on_the_fly_webbpsf_options = dict() # Extra options for configuring the PSF calculation ad hoc.
-                                    # note some options are overridden in get_psf_on_the_fly()
-on_the_fly_webbpsf_opd = None       # Allow overriding the default OPD selection when computing PSFs on the fly
-#on_the_fly_cache_maxsize = 256     # Number of monochromatic PSFs stored in an LRU cache
-                                    # Should speed up calculations that involve modifying things
-                                    # like exposure time and don't actually require calculating new PSFs. 
-# By default, the pandeia engine uses a fixed seed.
-# This has undesirable results for many coronagraphy
-# applications.
-pandeia_seed = Observation.get_random_seed
-pandeia_fixed_seed = False
+# Initialize the engine options
+options = EngineConfiguration()
 
 def get_template(filename):
     ''' Look up a template filename.
@@ -60,7 +44,7 @@ def list_templates():
     '''
     List all bundled template calculation files.
     '''
-    templatewildcard = pkg_resources.resource_filename(templates.__name__,'*.json')
+    templatewildcard = pkg_resources.resource_filename(templates.__name__, '*.json')
     return [os.path.basename(fname) for fname in glob(templatewildcard)]
 
 def load_calculation(filename):
@@ -69,8 +53,8 @@ def load_calculation(filename):
     return calcfile
 
 def save_calculation(calcfile,filename):
-    with open(filename,'w+') as f:
-        json.dump(calcfile,f,indent=2)
+    with open(filename, 'w+') as f:
+        json.dump(calcfile, f, indent=2)
 
 def save_to_fits(array,filename):
     hdu = fits.PrimaryHDU(array)
@@ -80,8 +64,8 @@ def save_to_fits(array,filename):
 def calculate_batch(calcfiles,nprocesses=None):
     if nprocesses is None:
         nprocesses = mp.cpu_count()
-    pool = mp.Pool(processes=nprocesses)
-    results = pool.map(perform_calculation,calcfiles)
+    pool = mp.Pool(processes = nprocesses)
+    results = pool.map(perform_calculation, calcfiles)
     pool.close()
     pool.join()
 
@@ -96,17 +80,20 @@ def perform_calculation(calcfile):
 
     Updates to the saturation computation could go here as well.
     '''
-    if on_the_fly_PSFs:
+    if options.on_the_fly_PSFs:
         pandeia.engine.psf_library.PSFLibrary.get_psf = on_the_fly_psf_wrapper
     else:
         pandeia.engine.psf_library.PSFLibrary.get_psf = pandeia_get_psf
-    if pandeia_fixed_seed:
+    if options.pandeia_fixed_seed:
         pandeia.engine.observation.Observation.get_random_seed = pandeia_seed
     else:
         pandeia.engine.observation.Observation.get_random_seed = random_seed
 
     calcfile = deepcopy(calcfile)
-    results = pandeia_calculation(calcfile)
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', category = np.VisibleDeprecationWarning) # Suppress float-indexing warnings
+        results = pandeia_calculation(calcfile)
 
     # Reset the fixed seed state set by the pandeia engine
     # to avoid unexpected results elsewhere
@@ -140,11 +127,11 @@ def get_psf_on_the_fly(wave, instrument, aperture_name, source_offset=(0, 0)):
     ins.pupil_mask = pupil_mask
 
     # Apply any extra options if specified by the user:
-    for key in on_the_fly_webbpsf_options:
-        ins.options[key] = on_the_fly_webbpsf_options[key]
+    for key in options.on_the_fly_webbpsf_options:
+        ins.options[key] = options.on_the_fly_webbpsf_options[key]
 
-    if on_the_fly_webbpsf_opd is not None:
-        ins.pupilopd = on_the_fly_webbpsf_opd
+    if options.on_the_fly_webbpsf_opd is not None:
+        ins.pupilopd = options.on_the_fly_webbpsf_opd
 
     #get offset
     ins.options['source_offset_r'] = source_offset[0]
@@ -176,8 +163,6 @@ def get_psf_on_the_fly(wave, instrument, aperture_name, source_offset=(0, 0)):
 def parse_aperture(aperture_name):
     '''
     Return [image mask, pupil mask, fov_pixels, trim_fov_pixels, pixelscale]
-
-    ADD MIRI PARAMETERS HERE
     '''
     
     aperture_keys = ['mask210r','mask335r','mask430r','masklwb','maskswb',
@@ -243,7 +228,7 @@ def ConvolvedSceneCubeinit(self, scene, instrument, background=None, psf_library
     unfortunately reproduced here to circumvent the wave sampling behavior.
 
     See the nw_maximal variable toward the end of this function. It's now controlled
-    by the global wave_sampling defined in this module.
+    by options.wave_sampling defined in this module.
     '''
     self.warnings = {}
     self.scene = scene
@@ -368,10 +353,10 @@ def ConvolvedSceneCubeinit(self, scene, instrument, background=None, psf_library
         (i.e. filter bandpass) should be more than enough. Note that because we use pysynphot
         to resample, the flux of even narrow lines is conserved.
         """
-        if wave_sampling is None:
+        if options.wave_sampling is None:
             nw_maximal = 200 #pandeia default
         else:
-            nw_maximal = wave_sampling
+            nw_maximal = options.wave_sampling
         if self.wave.size > nw_maximal:
             self.wave = np.linspace(wrange['wmin'], wrange['wmax'], nw_maximal)
 
