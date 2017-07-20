@@ -24,13 +24,13 @@ Alternatively, follow these step-by-step instructions:
 
 3. Create a conda environment with the STScI software stack:
 
- ``conda create -n astroconda stsci python=2.7 numpy=1.11``
+ ``conda create -n astroconda stsci python=2.7``
 
 4. Activate this environment with ``source activate astroconda``. (NB: Conda is only compatible with a BASH shell.)
 
 5. Install the Pandeia engine with this command: ``pip install pandeia.engine``. (You *should* already have the Pysynphot package installed at this point. If you don't, install it with ``pip install pysypnphot``. You can generate a list of installed packages with ``conda list``.)
 
-6. Download and unzip the `Pandeia data files <http://ssb.stsci.edu/pandeia/engine/1.0/pandeia_data-1.0.tar.gz>`_ and the PySynphot data files (ftp://archive.stsci.edu/pub/hst/pysynphot/). See `Installing PySynphot Data Files`_ for more detail on setting up the PySynphot data files.
+6. Download and unzip the `Pandeia 1.1.1 data files <http://ssb.stsci.edu/pandeia/engine/1.1.1/pandeia_data-1.1.1.tar.gz>`_ and the PySynphot data files (ftp://archive.stsci.edu/pub/hst/pysynphot/). See `Installing PySynphot Data Files`_ for more detail on setting up the PySynphot data files.
 
 7. Add the following lines to your ~/.bashrc file (and ``source`` it after modifying):
 
@@ -58,6 +58,6 @@ Getting Started
 
 Once installation is complete, take a look at the provided `Jupyter notebooks <https://github.com/kvangorkom/pandeia-coronagraphy/tree/master/notebooks>`_ for examples of constructing a scene, setting instrument properties, running the Pandeia engine, and performing some basic post-processing.
 
-You can find a more complete description of the engine inputs `here <https://gist.github.com/nmearl/2465fe054a71ddaadba349398fa3e146#file-engine_input-md>`_ and outputs `here <https://gist.github.com/nmearl/2465fe054a71ddaadba349398fa3e146#file-engine_output-md>`_.
+You can find a quickstart guide to using the Pandeia engine `here <https://github.com/spacetelescope/pandeia-tutorials>`_, which also includes a description of the engine `inputs <https://github.com/spacetelescope/pandeia-tutorials/blob/master/reference/engine_input.md>`_ and `outputs <https://github.com/spacetelescope/pandeia-tutorials/blob/master/reference/engine_output.md>`_.
 
-Example input templates for the Pandeia engine are provided `here <https://github.com/kvangorkom/pandeia-coronagraphy/tree/master/pandeia_coronagraphy/templates>`_.
+Example input templates for the Pandeia engine are provided for coronagraphy `here <https://github.com/kvangorkom/pandeia-coronagraphy/tree/master/pandeia_coronagraphy/templates>`_ and for other instruments and observing modes `here <https://github.com/spacetelescope/pandeia-tutorials/tree/master/configurations/jwst>`_.
