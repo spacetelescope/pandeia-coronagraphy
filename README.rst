@@ -24,7 +24,7 @@ Alternatively, follow these step-by-step instructions:
 
 3. Create a conda environment with the STScI software stack:
 
- ``conda create -n astroconda stsci python=2.7 numpy=1.11``
+ ``conda create -n astroconda stsci python=2.7``
 
 4. Activate this environment with ``source activate astroconda``. (NB: Conda is only compatible with a BASH shell.)
 
