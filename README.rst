@@ -60,4 +60,4 @@ Once installation is complete, take a look at the provided `Jupyter notebooks <h
 
 You can find a quickstart guide to using the Pandeia engine `here <https://github.com/spacetelescope/pandeia-tutorials>`_, which also includes a description of the engine `inputs <https://github.com/spacetelescope/pandeia-tutorials/blob/master/reference/engine_input.md>`_ and `outputs <https://github.com/spacetelescope/pandeia-tutorials/blob/master/reference/engine_output.md>`_.
 
-Example input templates for the Pandeia engine are provided for coronagraphy `here <https://github.com/kvangorkom/pandeia-coronagraphy/tree/master/templates>`_ and for other instruments and observing modes `here <https://github.com/spacetelescope/pandeia-tutorials/tree/master/configurations/jwst>`_.
+Example input templates for the Pandeia engine are provided for coronagraphy `here <https://github.com/kvangorkom/pandeia-coronagraphy/tree/master/pandeia_coronagraphy/templates>`_ and for other instruments and observing modes `here <https://github.com/spacetelescope/pandeia-tutorials/tree/master/configurations/jwst>`_.
