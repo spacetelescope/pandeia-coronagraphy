@@ -81,7 +81,7 @@ def perform_calculation(calcfile):
     Updates to the saturation computation could go here as well.
     '''
     if options.on_the_fly_PSFs:
-        pandeia.engine.psf_library.PSFLibrary.get_psf = on_the_fly_psf_wrapper
+        pandeia.engine.psf_library.PSFLibrary.get_psf = get_psf
     else:
         pandeia.engine.psf_library.PSFLibrary.get_psf = pandeia_get_psf
     if options.pandeia_fixed_seed:
@@ -100,20 +100,20 @@ def perform_calculation(calcfile):
     np.random.seed(None) 
 
     return results
-
-def on_the_fly_psf_wrapper(self,*args,**kwargs):
-    '''
-    An additional layer to allow the use of lru_cache on
-    on-the-fly PSFs (which requires hashable inputs)
-    '''
-    return get_psf_on_the_fly(*args,**kwargs)
-
-#@lru_cache(maxsize=on_the_fly_cache_maxsize)
-def get_psf_on_the_fly(wave, instrument, aperture_name, source_offset=(0, 0)):
+    
+def get_psf(self, wave, instrument, aperture_name, source_offset=(0, 0)):
     #Make the instrument and determine the mode
     if instrument.upper() == 'NIRCAM':
         ins = webbpsf.NIRCam()
-
+        
+        # WebbPSF needs to know the filter to select the optimal 
+        # offset for the bar masks. The filter is not passed into
+        # get_psf but is stored in the full aperture name in self._psfs
+        if aperture_name in ['masklwb', 'maskswb']:
+            # Everything after the aperture name is the filter name.
+            full_aperture = self._psfs[0]['aperture_name']
+            fname = full_aperture[full_aperture.find(aperture_name) + len(aperture_name):]
+            ins.filter = fname
         if wave > 2.5:
             # need to toggle to LW detector.
             ins.detector='A5'
@@ -141,7 +141,7 @@ def get_psf_on_the_fly(wave, instrument, aperture_name, source_offset=(0, 0)):
 
     psf_result = calc_psf_and_center(ins, wave, source_offset[0], source_offset[1], 3,
                             pix_scl, fov_pixels, trim_fov_pixels=trim_fov_pixels)
-    
+
     pix_scl = psf_result[0].header['PIXELSCL']
     upsamp = psf_result[0].header['OVERSAMP']
     diff_limit = psf_result[0].header['DIFFLMT']
