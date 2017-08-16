@@ -35,11 +35,11 @@ def configure_star(calc_input, kmag=9, sptype='g2v'):
 
 def configure_telescope(step='mimf', defocus_waves=0.0):
     """ Convenience function for configuring the telescope """
-    engine.on_the_fly_PSFs =  True
+    engine.options.on_the_fly_PSFs =  True
 
     if step.lower()=='mimf':
-        engine.on_the_fly_webbpsf_options['defocus_waves'] = defocus_waves
-        engine.on_the_fly_webbpsf_options['defocus_wavelength'] = 2e-6
+        engine.options.on_the_fly_webbpsf_options['defocus_waves'] = defocus_waves
+        engine.options.on_the_fly_webbpsf_options['defocus_wavelength'] = 2e-6
     else:
         raise ValueError("Don't know how to configure for step={} yet".format(step))
 
@@ -107,17 +107,18 @@ def assess_well_fraction(results, verbose=False):
     # Note there are several subtle variants of integration time; we want
     # the 'saturation time' which is generally equal to the ramp time
     # unless there are initial dropped frames.
-    inttime = results['information']['exposure_specification']['tsat']
+    inttime = results['information']['exposure_specification']['saturation_time']
     instr =  engine.InstrumentFactory(results['input']['configuration'])
 
     det_pars = instr.det_pars
-    # For NIRCam, need to select either SW vs LW det_par instance
-    if instr.inst_name=='nircam':
-        det_pars = det_pars[instr.mode[0:2]]
-    elif instr.inst_name=='miri':
-        det_pars = det_pars['imager'] # NOT either MRS one!
-
-    fullwell = det_pars['fullwell']
+    fullwell = det_pars['fullwell'][instr.get_aperture()]
+    #if instr.inst_name=='nircam':
+    #    # For NIRCam, need to select either SW vs LW saturation value
+    #    fullwell = det_pars['fullwell'][instr.get_aperture()]
+    #elif instr.inst_name=='miri':
+    #    det_pars = det_pars['imager'] # NOT either MRS one!
+    #else:
+    #    fullwell = det_pars['fullwell']
 
     peakpix = results['2d']['detector'].max()*inttime
     fraction = peakpix/fullwell
