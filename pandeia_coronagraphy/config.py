@@ -16,6 +16,7 @@ class EngineConfiguration(object):
         self._on_the_fly_webbpsf_options = {}
         self._on_the_fly_webbpsf_opd = None
         self._pandeia_fixed_seed = False
+        self.verbose=False
     
     @property
     def wave_sampling(self):
