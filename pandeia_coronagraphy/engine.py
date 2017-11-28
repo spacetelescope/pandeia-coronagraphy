@@ -7,10 +7,10 @@ import pkg_resources
 import sys
 import warnings
 
-#if sys.version_info > (3, 2):
-#    from functools import lru_cache
-#else:
-#    from functools32 import lru_cache
+if sys.version_info > (3, 2):
+    from functools import lru_cache
+else:
+    from functools32 import lru_cache
 
 import numpy as np
 
@@ -35,6 +35,12 @@ from . import templates
 
 # Initialize the engine options
 options = EngineConfiguration()
+
+latest_on_the_fly_PSF = None
+cache_maxsize = 256     # Number of monochromatic PSFs stored in an LRU cache
+                        # Should speed up calculations that involve modifying things
+                        # like exposure time and don't actually require calculating new PSFs.
+
 
 def get_template(filename):
     ''' Look up a template filename.
@@ -121,8 +127,37 @@ def associate_offset_to_source(self, sources, instrument, aperture_name):
     
     return psf_associations
 
-    
-def get_psf(self, wave, instrument, aperture_name, source_offset=(0, 0)):
+def get_psf_cache_wrapper(self,*args,**kwargs):
+    '''
+    An additional layer to allow the use of lru_cache on
+    on-the-fly PSFs (which requires hashable inputs,
+    and should not include the 'self' argument that
+    was added in pandeia 1.1.1...
+
+    '''
+    global latest_on_the_fly_PSF
+
+
+    # Include the on-the-fly override options in the hash key for the lru_cache
+    otf_options = tuple(sorted(options.on_the_fly_webbpsf_options.items()) +
+            [options.on_the_fly_webbpsf_opd,])
+
+    # this may be needed in get_psf; extract it so we can avoid
+    # passing in 'self', which isn't hashable for the cache lookup
+    full_aperture = self._psfs[0]['aperture_name']
+
+    if options.verbose:
+        print("Getting PSF for: {}, {}, options={}, aperture={}".format( args, kwargs, otf_options, full_aperture))
+
+    tmp = get_psf(*args,**kwargs,otf_options=otf_options,
+            full_aperture=full_aperture)
+    latest_on_the_fly_PSF = deepcopy(tmp)
+    return tmp
+
+
+@lru_cache(maxsize=cache_maxsize)
+def get_psf( wave, instrument, aperture_name, source_offset=(0, 0), otf_options=None,
+        full_aperture=None):
     #Make the instrument and determine the mode
     if instrument.upper() == 'NIRCAM':
         ins = webbpsf.NIRCam()
