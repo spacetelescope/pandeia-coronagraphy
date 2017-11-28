@@ -111,14 +111,13 @@ def assess_well_fraction(results, verbose=False):
     instr =  engine.InstrumentFactory(results['input']['configuration'])
 
     det_pars = instr.det_pars
-    fullwell = det_pars['fullwell'][instr.get_aperture()]
-    #if instr.inst_name=='nircam':
-    #    # For NIRCam, need to select either SW vs LW saturation value
-    #    fullwell = det_pars['fullwell'][instr.get_aperture()]
+    if instr.inst_name=='nircam':
+        # For NIRCam, need to select either SW vs LW saturation value
+        fullwell = det_pars['fullwell'][instr.get_aperture()]
     #elif instr.inst_name=='miri':
     #    det_pars = det_pars['imager'] # NOT either MRS one!
-    #else:
-    #    fullwell = det_pars['fullwell']
+    else:
+        fullwell = det_pars['fullwell']
 
     peakpix = results['2d']['detector'].max()*inttime
     fraction = peakpix/fullwell
