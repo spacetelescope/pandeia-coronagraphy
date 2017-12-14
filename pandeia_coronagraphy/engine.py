@@ -87,9 +87,6 @@ def perform_calculation(calcfile):
 
     Updates to the saturation computation could go here as well.
     '''
-#    if options.on_the_fly_PSFs:
-#        pandeia.engine.psf_library.PSFLibrary.get_psf = get_psf_cache_wrapper
-#        pandeia.engine.psf_library.PSFLibrary.associate_offset_to_source = associate_offset_to_source #Added function
     if options.on_the_fly_PSFs:
         pandeia.engine.psf_library.PSFLibrary.get_psf = get_psf_cache_wrapper
         pandeia.engine.psf_library.PSFLibrary.associate_offset_to_source = associate_offset_to_source #Added function
@@ -113,22 +110,6 @@ def perform_calculation(calcfile):
 
     return results
 
-def associate_offset_to_source(self, sources, instrument, aperture_name):
-    '''
-    Added azimuth information for use with webbpsf. Pandeia currently does not calculate 
-    the PA and assumes azimuthal symmetry resulting in incorrect calculations when using 
-    the bar coronagraph. 
-    '''
-    #MOD 4
-    psf_offsets = self.get_offsets(instrument, aperture_name)
-    psf_associations = []
-    for source in sources:
-        # Currently, we only associate radius, not angle.   
-        source_offset_radius = np.sqrt(source.position['x_offset']**2. + source.position['y_offset']**2.)
-        source_offset_azimuth = 360*(np.pi+np.arctan2(source.position['x_offset'],source.position['y_offset']))/2/np.pi
-        psf_associations.append((source_offset_radius,source_offset_azimuth))
-
-    return psf_associations
 
 def get_psf_cache_wrapper(self,*args,**kwargs):
     '''
@@ -181,8 +162,6 @@ def get_psf( wave, instrument, aperture_name, source_offset=(0, 0), otf_options=
         ins = webbpsf.MIRI()
     else:
         raise ValueError('Only NIRCam and MIRI are supported instruments!')
-    
-
     image_mask, pupil_mask, fov_pixels, trim_fov_pixels, pix_scl = parse_aperture(aperture_name)
     ins.image_mask = image_mask
     ins.pupil_mask = pupil_mask
@@ -190,6 +169,7 @@ def get_psf( wave, instrument, aperture_name, source_offset=(0, 0), otf_options=
     # Apply any extra options if specified by the user:
     for key in options.on_the_fly_webbpsf_options:
         ins.options[key] = options.on_the_fly_webbpsf_options[key]
+
     if options.on_the_fly_webbpsf_opd is not None:
         ins.pupilopd = options.on_the_fly_webbpsf_opd
 
