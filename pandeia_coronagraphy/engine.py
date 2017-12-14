@@ -88,8 +88,8 @@ def perform_calculation(calcfile):
     Updates to the saturation computation could go here as well.
     '''
     if options.on_the_fly_PSFs:
-        pandeia.engine.psf_library.PSFLibrary.associate_offset_to_source = associate_offset_to_source #Added function
         pandeia.engine.psf_library.PSFLibrary.get_psf = get_psf_cache_wrapper
+        pandeia.engine.psf_library.PSFLibrary.associate_offset_to_source = pandeia_associate_offset_to_source #Original pandeia function
     else:
         pandeia.engine.psf_library.PSFLibrary.get_psf = pandeia_get_psf
         pandeia.engine.psf_library.PSFLibrary.associate_offset_to_source = pandeia_associate_offset_to_source #Original pandeia function
