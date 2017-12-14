@@ -89,9 +89,10 @@ def perform_calculation(calcfile):
     '''
     if options.on_the_fly_PSFs:
         pandeia.engine.psf_library.PSFLibrary.get_psf = get_psf_cache_wrapper
+        pandeia.engine.psf_library.PSFLibrary.associate_offset_to_source = associate_offset_to_source #Added function
     else:
         pandeia.engine.psf_library.PSFLibrary.get_psf = pandeia_get_psf
-        pandeia.engine.psf_library.PSFLibrary.associate_offset_to_source = pandeia_associate_offset_to_source #MOD 3
+        pandeia.engine.psf_library.PSFLibrary.associate_offset_to_source = pandeia_associate_offset_to_source #Original pandeia function
     if options.pandeia_fixed_seed:
         pandeia.engine.observation.Observation.get_random_seed = pandeia_seed
     else:
