@@ -18,6 +18,7 @@ import pandeia
 from pandeia.engine.instrument_factory import InstrumentFactory
 from pandeia.engine.psf_library import PSFLibrary
 pandeia_get_psf = PSFLibrary.get_psf
+pandeia_associate_offset_to_source = PSFLibrary.associate_offset_to_source #MOD 1
 from pandeia.engine.perform_calculation import perform_calculation as pandeia_calculation
 from pandeia.engine.observation import Observation
 pandeia_seed = Observation.get_random_seed
@@ -90,6 +91,7 @@ def perform_calculation(calcfile):
         pandeia.engine.psf_library.PSFLibrary.get_psf = get_psf_cache_wrapper
     else:
         pandeia.engine.psf_library.PSFLibrary.get_psf = pandeia_get_psf
+        pandeia.engine.psf_library.PSFLibrary.associate_offset_to_source = pandeia_associate_offset_to_source #Original pandeia function
     if options.pandeia_fixed_seed:
         pandeia.engine.observation.Observation.get_random_seed = pandeia_seed
     else:
@@ -106,7 +108,6 @@ def perform_calculation(calcfile):
     np.random.seed(None) 
 
     return results
-
 
 def get_psf_cache_wrapper(self,*args,**kwargs):
     '''
