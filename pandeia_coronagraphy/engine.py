@@ -110,6 +110,21 @@ def perform_calculation(calcfile):
 
     return results
 
+def associate_offset_to_source(self, sources, instrument, aperture_name):
+    '''
+    Added azimuth information for use with webbpsf. Pandeia currently does not calculate 
+    the PA and assumes azimuthal symmetry resulting in incorrect calculations when using 
+    the bar coronagraph. 
+    '''
+    psf_offsets = self.get_offsets(instrument, aperture_name)
+    psf_associations = []
+    for source in sources:
+        # Currently, we only associate radius, not angle.   
+        source_offset_radius = np.sqrt(source.position['x_offset']**2. + source.position['y_offset']**2.)
+        source_offset_azimuth = 360*(np.pi+np.arctan2(source.position['x_offset'],source.position['y_offset']))/2/np.pi
+        psf_associations.append((source_offset_radius,source_offset_azimuth))
+
+    return psf_associations
 
 def get_psf_cache_wrapper(self,*args,**kwargs):
     '''
