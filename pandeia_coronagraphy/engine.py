@@ -18,6 +18,7 @@ import pandeia
 from pandeia.engine.instrument_factory import InstrumentFactory
 from pandeia.engine.psf_library import PSFLibrary
 pandeia_get_psf = PSFLibrary.get_psf
+pandeia_associate_offset_to_source = PSFLibrary.associate_offset_to_source #MOD 1
 from pandeia.engine.perform_calculation import perform_calculation as pandeia_calculation
 from pandeia.engine.observation import Observation
 pandeia_seed = Observation.get_random_seed
@@ -88,8 +89,10 @@ def perform_calculation(calcfile):
     '''
     if options.on_the_fly_PSFs:
         pandeia.engine.psf_library.PSFLibrary.get_psf = get_psf_cache_wrapper
+        pandeia.engine.psf_library.PSFLibrary.associate_offset_to_source = associate_offset_to_source #Added function
     else:
         pandeia.engine.psf_library.PSFLibrary.get_psf = pandeia_get_psf
+        pandeia.engine.psf_library.PSFLibrary.associate_offset_to_source = pandeia_associate_offset_to_source #Original pandeia function
     if options.pandeia_fixed_seed:
         pandeia.engine.observation.Observation.get_random_seed = pandeia_seed
     else:
@@ -107,6 +110,21 @@ def perform_calculation(calcfile):
 
     return results
 
+def associate_offset_to_source(self, sources, instrument, aperture_name):
+    '''
+    Added azimuth information for use with webbpsf. Pandeia currently does not calculate 
+    the PA and assumes azimuthal symmetry resulting in incorrect calculations when using 
+    the bar coronagraph. 
+    '''
+    psf_offsets = self.get_offsets(instrument, aperture_name)
+    psf_associations = []
+    for source in sources:
+        # Currently, we only associate radius, not angle.   
+        source_offset_radius = np.sqrt(source.position['x_offset']**2. + source.position['y_offset']**2.)
+        source_offset_azimuth = 360*(np.pi+np.arctan2(source.position['x_offset'],source.position['y_offset']))/2/np.pi
+        psf_associations.append((source_offset_radius,source_offset_azimuth))
+
+    return psf_associations
 
 def get_psf_cache_wrapper(self,*args,**kwargs):
     '''
