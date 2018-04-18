@@ -1,0 +1,81 @@
+{
+  "calculation": {
+    "effects": {
+      "saturation": true,
+      "ipc": true,
+      "background": true
+    },
+    "noise": {
+      "readnoise": true,
+      "crs": true,
+      "ffnoise": true,
+      "rn_correlation": true,
+      "darkcurrent": true
+    }
+  },
+  "configuration": {
+    "max_scene_size": 10.0,
+    "detector": {
+      "nexp": 1,
+      "nint": 1,
+      "ngroup": 3,
+      "readmode": "nrsrapid",
+      "subarray": "sub32"
+    },
+    "scene_size": 6.0,
+    "instrument": {
+      "instrument": "nirspec",
+      "mode": "target_acq",
+      "aperture": "s1600a1",
+      "filter": "f110w",
+      "disperser": null
+    },
+    "dynamic_scene": true
+  },
+  "strategy": {
+    "method": "taphot",
+    "target_type": "source",
+    "target_xy": [
+      0.0,
+      0.0
+    ],
+    "target_source": 1,
+    "background_subtraction": true,
+    "units": "arcsec"
+  },
+  "scene": [
+    {
+      "id": 1,
+      "position": {
+        "x_offset": 0.0,
+        "orientation": 0.0,
+        "y_offset": 0.0
+      },
+      "spectrum": {
+        "normalization": {
+          "type": "photsys",
+          "norm_flux": 9,
+          "norm_fluxunit": "vegamag",
+          "bandpass": "bessel,k"
+        },
+        "lines": [],
+        "extinction": {
+          "law": "mw_rv_31",
+          "value": 0.0,
+          "unit": "mag",
+          "bandpass": "v"
+        },
+        "sed": {
+          "sed_type": "phoenix",
+          "key": "g2v"
+        },
+        "redshift": 0.0,
+        "name": "generic source"
+      },
+      "shape": {
+        "geometry": "point"
+      }
+    }
+  ],
+  "background": "medium"
+}
