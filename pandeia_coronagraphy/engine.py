@@ -1,3 +1,7 @@
+from __future__ import absolute_import
+
+# Just build an actual subclass of the necessary JWST classes
+
 from copy import deepcopy
 from glob import glob
 import json
@@ -6,6 +10,8 @@ import os
 import pkg_resources
 import sys
 import warnings
+import astropy.units as units
+from poppy import poppy_core
 
 if sys.version_info > (3, 2):
     from functools import lru_cache
@@ -19,6 +25,8 @@ from pandeia.engine.instrument_factory import InstrumentFactory
 from pandeia.engine.psf_library import PSFLibrary
 pandeia_get_psf = PSFLibrary.get_psf
 pandeia_associate_offset_to_source = PSFLibrary.associate_offset_to_source #MOD 1
+pandeia_get_upsamp = PSFLibrary.get_upsamp
+pandeia_get_pix_scale = PSFLibrary.get_pix_scale
 from pandeia.engine.perform_calculation import perform_calculation as pandeia_calculation
 from pandeia.engine.observation import Observation
 pandeia_seed = Observation.get_random_seed
@@ -30,8 +38,8 @@ except ImportError:
     pass
 
 from .config import EngineConfiguration
-from . import transformations
 from . import templates
+# from .templates import templates
 
 # Initialize the engine options
 options = EngineConfiguration()
@@ -89,9 +97,13 @@ def perform_calculation(calcfile):
     '''
     if options.on_the_fly_PSFs:
         pandeia.engine.psf_library.PSFLibrary.get_psf = get_psf_cache_wrapper
+        pandeia.engine.psf_library.PSFLibrary.get_upsamp = get_upsamp
+        pandeia.engine.psf_library.PSFLibrary.get_pix_scale = get_pix_scale
         pandeia.engine.psf_library.PSFLibrary.associate_offset_to_source = associate_offset_to_source #Added function
     else:
         pandeia.engine.psf_library.PSFLibrary.get_psf = pandeia_get_psf
+        pandeia.engine.psf_library.PSFLibrary.get_upsamp = pandeia_get_upsamp
+        pandeia.engine.psf_library.PSFLibrary.get_pix_scale = pandeia_get_pix_scale
         pandeia.engine.psf_library.PSFLibrary.associate_offset_to_source = pandeia_associate_offset_to_source #Original pandeia function
     if options.pandeia_fixed_seed:
         pandeia.engine.observation.Observation.get_random_seed = pandeia_seed
@@ -99,6 +111,9 @@ def perform_calculation(calcfile):
         pandeia.engine.observation.Observation.get_random_seed = random_seed
 
     calcfile = deepcopy(calcfile)
+    
+    # print("perform_calculation")
+    # print("Calculation: {}".format(calcfile['scene']))
 
     with warnings.catch_warnings():
         warnings.filterwarnings('ignore', category = np.VisibleDeprecationWarning) # Suppress float-indexing warnings
@@ -116,12 +131,18 @@ def associate_offset_to_source(self, sources, instrument, aperture_name):
     the PA and assumes azimuthal symmetry resulting in incorrect calculations when using 
     the bar coronagraph. 
     '''
+#     print("Associate Offsets to Source:")
+#     for source in sources:
+#         print("Source {}: position {}, shape {}, spectrum {}".format(source.id, source.position, source.shape, source.spectrum))
     psf_offsets = self.get_offsets(instrument, aperture_name)
+    # print("PSF Offsets: {}".format(psf_offsets))
     psf_associations = []
     for source in sources:
+        # print("Offsets: x={}, y={} (pixels)".format(source.position['x_offset'], source.position['y_offset']))
         # Currently, we only associate radius, not angle.   
         source_offset_radius = np.sqrt(source.position['x_offset']**2. + source.position['y_offset']**2.)
         source_offset_azimuth = 360*(np.pi+np.arctan2(source.position['x_offset'],source.position['y_offset']))/2/np.pi
+        # print("Offsets: r={}, theta={} (arcseconds)".format(source_offset_radius, source_offset_azimuth))
         psf_associations.append((source_offset_radius,source_offset_azimuth))
 
     return psf_associations
@@ -138,8 +159,7 @@ def get_psf_cache_wrapper(self,*args,**kwargs):
 
 
     # Include the on-the-fly override options in the hash key for the lru_cache
-    otf_options = tuple(sorted(options.on_the_fly_webbpsf_options.items()) +
-            [options.on_the_fly_webbpsf_opd,])
+    otf_options = tuple(sorted(options.on_the_fly_webbpsf_options.items()) + [options.on_the_fly_webbpsf_opd,])
 
     # this may be needed in get_psf; extract it so we can avoid
     # passing in 'self', which isn't hashable for the cache lookup
@@ -148,8 +168,7 @@ def get_psf_cache_wrapper(self,*args,**kwargs):
     if options.verbose:
         print("Getting PSF for: {}, {}, options={}, aperture={}".format( args, kwargs, otf_options, full_aperture))
 
-    tmp = get_psf(*args,**kwargs,otf_options=otf_options,
-            full_aperture=full_aperture)
+    tmp = get_psf(otf_options=otf_options, full_aperture=full_aperture, *args, **kwargs)
     latest_on_the_fly_PSF = deepcopy(tmp)
     return tmp
 
@@ -193,9 +212,18 @@ def get_psf( wave, instrument, aperture_name, source_offset=(0, 0), otf_options=
     ins.options['source_offset_theta'] = source_offset[1]
     ins.options['output_mode'] = 'oversampled'
     ins.options['parity'] = 'odd'
+    
+    # print("get_psf")
+    # print("Offsets: r={}, theta={} (arcseconds)".format(source_offset[0], source_offset[1]))
+    
+    optsys = ins._getOpticalSystem(fft_oversample=3, detector_oversample=3, fov_arcsec=None, fov_pixels=fov_pixels)
+    sf = (1./(optsys.planes[0].pixelscale * 2 * units.pixel)).to(1./units.meter).value
+    critical_angle_arcsec = wave*1.e-6*sf*poppy_core._RADIANStoARCSEC
+    critical_angle_pixels = int(np.floor(0.5 * critical_angle_arcsec / pix_scl))
+    fov_pix = min(fov_pixels, critical_angle_pixels)
+    trim_fov_pix = min(trim_fov_pixels, critical_angle_pixels)
 
-    psf_result = calc_psf_and_center(ins, wave, source_offset[0], source_offset[1], 3,
-                            pix_scl, fov_pixels, trim_fov_pixels=trim_fov_pixels)
+    psf_result = calc_psf_and_center(ins, wave, source_offset[0], source_offset[1], 3, pix_scl, fov_pix, trim_fov_pixels=trim_fov_pix)
 
     pix_scl = psf_result[0].header['PIXELSCL']
     upsamp = psf_result[0].header['OVERSAMP']
@@ -212,8 +240,53 @@ def get_psf( wave, instrument, aperture_name, source_offset=(0, 0), otf_options=
         'aperture_name': aperture_name,
         'source_offset': source_offset
     }
+    print("Creating PSF for {} {} at {} with pixel scale {} and oversample {}".format(instrument, aperture_name, wave, pix_scl, upsamp))
 
     return psf
+
+def get_upsamp(self, instrument, aperture_name):
+    """
+    Get PSF upsampling for given instrument/aperture
+
+    Parameters
+    ----------
+    instrument: str
+        Instrument name
+    aperture_name: str
+        Name of instrument aperture
+
+    Returns
+    -------
+    upsamp: int
+        PSF upsampling factor
+    """
+#     return 3
+    wids, psf_waves = self.get_values('wave', instrument, aperture_name)
+    upsamp = self._psfs[wids[0]]['upsamp']
+    return upsamp
+
+def get_pix_scale(self, instrument, aperture_name):
+    """
+    Get PSF pixel scale for given instrument/aperture
+
+    Parameters
+    ----------
+    instrument: str
+        Instrument name
+    aperture_name: str
+        Name of instrument aperture
+
+    Returns
+    -------
+    pix_scl: float
+        Pixel scale of the PSF in arcsec/pixel
+    """
+    aperture_dict = parse_aperture(aperture_name)
+    upsample = self.get_upsamp(instrument, aperture_name)
+    return aperture_dict[4]/upsample
+#     wids, psf_waves = self.get_values('wave', instrument, aperture_name)
+#     pix_scl = self._psfs[wids[0]]['pix_scl']
+#     return pix_scl
 
 def parse_aperture(aperture_name):
     '''
@@ -239,7 +312,9 @@ def parse_aperture(aperture_name):
         'fqpm1550' : ['FQPM1550','MASKFQPM', 81, None, miri.pixelscale],
         'lyot2300' : ['LYOT2300','MASKLYOT', 81, None, miri.pixelscale]
         }
-  
+    
+    print("{} pixel scale is {}".format(aperture_name, aperture_dict[aperture_name][4]))
+    
     return aperture_dict[aperture_name]
 
 def calc_psf_and_center(ins, wave, offset_r, offset_theta, oversample, pix_scale, fov_pixels, trim_fov_pixels=None):
@@ -248,34 +323,88 @@ def calc_psf_and_center(ins, wave, offset_r, offset_theta, oversample, pix_scale
     off-center PSFs for use as a kernel in later convolutions.
     '''
 
+    # Create an optical system model. This is done because, in order to determine the critical angle, we need this model, and it otherwise
+    #    wouldn't be generated until the PSF itself is generated. In this case, we want to generate the model early because we want to make
+    #    sure that the observation *isn't* over the critical angle *before* generating the PSF
+    optsys = ins._getOpticalSystem(fft_oversample=3, detector_oversample=3, fov_arcsec=None, fov_pixels=fov_pixels)
+    # determine the spatial frequency which is Nyquist sampled by the input pupil.
+    # convert this to units of cycles per meter and make it not a Quantity
+    sf = (1./(optsys.planes[0].pixelscale * 2 * units.pixel)).to(1./units.meter).value
+    critical_angle_arcsec = wave*1.e-6*sf*poppy_core._RADIANStoARCSEC
+    critical_angle_pixels = int(np.floor(0.5 * critical_angle_arcsec / pix_scale))
+
     if offset_r > 0.:
+        # print("Offsets: r={}, theta={} (arcseconds)".format(offset_r, offset_theta))
         #roll back to center
         dx = int(np.rint( offset_r * np.sin(np.deg2rad(offset_theta)) / pix_scale ))
         dy = int(np.rint( offset_r * np.cos(np.deg2rad(offset_theta)) / pix_scale ))
         dmax = np.max([np.abs(dx), np.abs(dy)])
+        # print("Cartesian Offsets: x={}, y={}, max={} (pixels)".format(dx, dy, dmax))
 
         # pandeia forces offset to nearest integer subsampled pixel.
         # At the risk of having subpixel offsets in the recentering,
         # I'm not sure we want to do this in order to capture
         # small-scale spatial variations properly.
         #ins.options['source_offset_r'] = np.sqrt(dx**2 + dy**2) * pix_scale
-
-        psf_result = ins.calc_psf(monochromatic=wave*1e-6, oversample=oversample, fov_pixels=fov_pixels + 2*dmax)
-
+        
+        psf_result = ins.calc_psf(monochromatic=wave*1e-6, oversample=oversample, fov_pixels=min(critical_angle_pixels, fov_pixels + 2*dmax))
+        
         image = psf_result[0].data
+        # print("Calculated Size: {}".format(image.shape))
+        # print("Maximum value {} at {}".format(np.max(image), np.unravel_index(image.argmax(), image.shape)))
+        # print("Moving image by ({},{})".format(dx*oversample, -dy*oversample))
         image = np.roll(image, dx * oversample, axis=1)
         image = np.roll(image, -dy * oversample, axis=0)
+        # print("Maximum value {} at {}".format(np.max(image), np.unravel_index(image.argmax(), image.shape)))
+        # print("Taking image[{}:{},{}:{}]".format(dmax * oversample, (fov_pixels + dmax) * oversample, dmax * oversample, (fov_pixels + dmax) * oversample))
         image = image[dmax * oversample:(fov_pixels + dmax) * oversample,
                       dmax * oversample:(fov_pixels + dmax) * oversample]
+        # print("Final Size: {}".format(image.shape))
+        # print("Maximum value {} at {}".format(np.max(image), np.unravel_index(image.argmax(), image.shape)))
         #trim if requested
         if trim_fov_pixels is not None:
             trim_amount = int(oversample * (fov_pixels - trim_fov_pixels) / 2)
             image = image[trim_amount:-trim_amount, trim_amount:-trim_amount]
         psf_result[0].data = image
     else:
-        psf_result = ins.calc_psf(monochromatic=wave*1e-6, oversample=oversample, fov_pixels=fov_pixels)
+        psf_result = ins.calc_psf(monochromatic=wave*1e-6, oversample=oversample, fov_pixels=min(critical_angle_pixels, fov_pixels))
 
     return psf_result
+
+# def calc_psf_and_center(ins, wave, offset_r, offset_theta, oversample, pix_scale, fov_pixels, trim_fov_pixels=None):
+#     '''
+#     Following the treatment in pandeia_data/dev/make_psf.py to handle
+#     off-center PSFs for use as a kernel in later convolutions.
+#     '''
+#     psf_result = ins.calc_psf(monochromatic=wave*1e-6, oversample=oversample, fov_pixels=fov_pixels)
+#     print(psf_result[0].data)
+# 
+#     if offset_r > 0.:
+#         #roll back to center
+#         dx = int(np.rint( offset_r * np.sin(np.deg2rad(offset_theta)) / pix_scale ))
+#         dy = int(np.rint( offset_r * np.cos(np.deg2rad(offset_theta)) / pix_scale ))
+#         dmax = np.max([np.abs(dx), np.abs(dy)])
+# 
+#         # pandeia forces offset to nearest integer subsampled pixel.
+#         # At the risk of having subpixel offsets in the recentering,
+#         # I'm not sure we want to do this in order to capture
+#         # small-scale spatial variations properly.
+#         #ins.options['source_offset_r'] = np.sqrt(dx**2 + dy**2) * pix_scale
+#         
+#         image = np.zeros(((fov_pixels+2*dmax)*oversample, (fov_pixels+2*dmax)*oversample), dtype=psf_result[0].data.dtype)
+#         image[dmax*oversample:-dmax*oversample,dmax*oversample:-dmax*oversample] = psf_result[0].data
+#         image = np.roll(image, dx * oversample, axis=1)
+#         image = np.roll(image, -dy * oversample, axis=0)
+#         image = image[dmax * oversample:(fov_pixels + dmax) * oversample,
+#                       dmax * oversample:(fov_pixels + dmax) * oversample]
+#         #trim if requested
+#         if trim_fov_pixels is not None:
+#             trim_amount = int(oversample * (fov_pixels - trim_fov_pixels) / 2)
+#             image = image[trim_amount:-trim_amount, trim_amount:-trim_amount]
+#         psf_result[0].data = image
+# 
+#     print(psf_result[0].data)
+#     return psf_result
 
 def ConvolvedSceneCubeinit(self, scene, instrument, background=None, psf_library=None, webapp=False):
     '''
@@ -426,12 +555,11 @@ def ConvolvedSceneCubeinit(self, scene, instrument, background=None, psf_library
     if self.background is not None:
         self.background.resample(self.wave)
 
-    self.grid, self.aperture_list, self.flux_cube_list, self.flux_plus_bg_list = \
-        self.create_flux_cube(background=self.background)
+    self.grid, self.aperture_list, self.flux_cube_list, self.flux_plus_bg_list = self.create_flux_cube(background=self.background)
 
     self.dist = self.grid.dist()
     
-pandeia.engine.astro_spectrum.ConvolvedSceneCube.__init__ = ConvolvedSceneCubeinit
+# pandeia.engine.astro_spectrum.ConvolvedSceneCube.__init__ = ConvolvedSceneCubeinit
 
 
 def _make_dither_weights(self):
@@ -444,8 +572,8 @@ def _make_dither_weights(self):
     self.dither_weights = [1,0,0] #Pandeia: [1,-1,0]
     del self.calc_type
     
-pandeia.engine.strategy.Coronagraphy._make_dither_weights = _make_dither_weights
-pandeia.engine.strategy.Coronagraphy._create_weight_matrix = pandeia.engine.strategy.ImagingApPhot._create_weight_matrix
+# pandeia.engine.strategy.Coronagraphy._make_dither_weights = _make_dither_weights
+# pandeia.engine.strategy.Coronagraphy._create_weight_matrix = pandeia.engine.strategy.ImagingApPhot._create_weight_matrix
 
 def random_seed(self):
     '''

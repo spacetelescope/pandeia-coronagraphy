@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+
 class EngineConfiguration(object):
     '''
     A class to consolidate the options for customizing

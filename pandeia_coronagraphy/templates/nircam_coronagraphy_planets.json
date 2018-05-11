@@ -181,6 +181,7 @@
     "method": "coronagraphy", 
     "target_source": 1, 
     "ncontrast": 100, 
+    "psf_subtraction": "target_only",
     "sky_annulus": [
       0.1, 
       0.2
@@ -207,7 +208,7 @@
         "normalization": {
           "norm_fluxunit": "abmag", 
           "type": "photsys", 
-          "norm_flux": 1000.0, 
+          "norm_flux": 100000.0, 
           "bandpass": "bessel,h"
         }, 
         "redshift": 0.0
