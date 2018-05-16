@@ -11,6 +11,7 @@ import pkg_resources
 import sys
 import warnings
 import astropy.units as units
+import astropy.io.fits as fits
 from poppy import poppy_core
 
 if sys.version_info > (3, 2):
@@ -23,6 +24,7 @@ import numpy as np
 import pandeia
 from pandeia.engine.instrument_factory import InstrumentFactory
 from pandeia.engine.psf_library import PSFLibrary
+from pandeia.engine.psf_library import PSFLibrary as PandeiaPSFLibrary
 pandeia_get_psf = PSFLibrary.get_psf
 pandeia_associate_offset_to_source = PSFLibrary.associate_offset_to_source #MOD 1
 pandeia_get_upsamp = PSFLibrary.get_upsamp
@@ -30,13 +32,19 @@ pandeia_get_pix_scale = PSFLibrary.get_pix_scale
 from pandeia.engine.perform_calculation import perform_calculation as pandeia_calculation
 from pandeia.engine.observation import Observation
 pandeia_seed = Observation.get_random_seed
-from pandeia.engine.astro_spectrum import * 
+from pandeia.engine.astro_spectrum import ConvolvedSceneCube
+PandeiaConvolvedSceneCube = ConvolvedSceneCube
+from pandeia.engine.constants import SPECTRAL_MAX_SAMPLES
+default_SPECTRAL_MAX_SAMPLES = SPECTRAL_MAX_SAMPLES
+from pandeia.engine.etc3D import DetectorSignal
+PandeiaDetectorSignal = DetectorSignal
 
 try:
     import webbpsf
 except ImportError:
     pass
 
+from .pandeia_subclasses import CoronagraphyPSFLibrary, CoronagraphyConvolvedSceneCube, CoronagraphyDetectorSignal
 from .config import EngineConfiguration
 from . import templates
 # from .templates import templates
@@ -76,6 +84,13 @@ def save_to_fits(array,filename):
     hdulist = fits.HDUList([hdu])
     hdulist.writeto(filename)
 
+def get_options():
+    '''
+    This returns the options object, and is used to let the various Pandeia-based subclasses get
+    the options object currently in use.
+    '''
+    return options
+
 def calculate_batch(calcfiles,nprocesses=None):
     if nprocesses is None:
         nprocesses = mp.cpu_count()
@@ -96,15 +111,15 @@ def perform_calculation(calcfile):
     Updates to the saturation computation could go here as well.
     '''
     if options.on_the_fly_PSFs:
-        pandeia.engine.psf_library.PSFLibrary.get_psf = get_psf_cache_wrapper
-        pandeia.engine.psf_library.PSFLibrary.get_upsamp = get_upsamp
-        pandeia.engine.psf_library.PSFLibrary.get_pix_scale = get_pix_scale
-        pandeia.engine.psf_library.PSFLibrary.associate_offset_to_source = associate_offset_to_source #Added function
+        pandeia.engine.psf_library.PSFLibrary = CoronagraphyPSFLibrary
+        pandeia.engine.instrument.PSFLibrary = CoronagraphyPSFLibrary
+        pandeia.engine.astro_spectrum.ConvolvedSceneCube = CoronagraphyConvolvedSceneCube
+        pandeia.engine.etc3D.DetectorSignal = CoronagraphyDetectorSignal
     else:
-        pandeia.engine.psf_library.PSFLibrary.get_psf = pandeia_get_psf
-        pandeia.engine.psf_library.PSFLibrary.get_upsamp = pandeia_get_upsamp
-        pandeia.engine.psf_library.PSFLibrary.get_pix_scale = pandeia_get_pix_scale
-        pandeia.engine.psf_library.PSFLibrary.associate_offset_to_source = pandeia_associate_offset_to_source #Original pandeia function
+        pandeia.engine.psf_library.PSFLibrary = PandeiaPSFLibrary
+        pandeia.engine.instrument.PSFLibrary = PSFLibrary
+        pandeia.engine.astro_spectrum.ConvolvedSceneCube = PandeiaConvolvedSceneCube
+        pandeia.engine.etc3D.DetectorSignal = PandeiaDetectorSignal
     if options.pandeia_fixed_seed:
         pandeia.engine.observation.Observation.get_random_seed = pandeia_seed
     else:
@@ -370,41 +385,6 @@ def calc_psf_and_center(ins, wave, offset_r, offset_theta, oversample, pix_scale
         psf_result = ins.calc_psf(monochromatic=wave*1e-6, oversample=oversample, fov_pixels=min(critical_angle_pixels, fov_pixels))
 
     return psf_result
-
-# def calc_psf_and_center(ins, wave, offset_r, offset_theta, oversample, pix_scale, fov_pixels, trim_fov_pixels=None):
-#     '''
-#     Following the treatment in pandeia_data/dev/make_psf.py to handle
-#     off-center PSFs for use as a kernel in later convolutions.
-#     '''
-#     psf_result = ins.calc_psf(monochromatic=wave*1e-6, oversample=oversample, fov_pixels=fov_pixels)
-#     print(psf_result[0].data)
-# 
-#     if offset_r > 0.:
-#         #roll back to center
-#         dx = int(np.rint( offset_r * np.sin(np.deg2rad(offset_theta)) / pix_scale ))
-#         dy = int(np.rint( offset_r * np.cos(np.deg2rad(offset_theta)) / pix_scale ))
-#         dmax = np.max([np.abs(dx), np.abs(dy)])
-# 
-#         # pandeia forces offset to nearest integer subsampled pixel.
-#         # At the risk of having subpixel offsets in the recentering,
-#         # I'm not sure we want to do this in order to capture
-#         # small-scale spatial variations properly.
-#         #ins.options['source_offset_r'] = np.sqrt(dx**2 + dy**2) * pix_scale
-#         
-#         image = np.zeros(((fov_pixels+2*dmax)*oversample, (fov_pixels+2*dmax)*oversample), dtype=psf_result[0].data.dtype)
-#         image[dmax*oversample:-dmax*oversample,dmax*oversample:-dmax*oversample] = psf_result[0].data
-#         image = np.roll(image, dx * oversample, axis=1)
-#         image = np.roll(image, -dy * oversample, axis=0)
-#         image = image[dmax * oversample:(fov_pixels + dmax) * oversample,
-#                       dmax * oversample:(fov_pixels + dmax) * oversample]
-#         #trim if requested
-#         if trim_fov_pixels is not None:
-#             trim_amount = int(oversample * (fov_pixels - trim_fov_pixels) / 2)
-#             image = image[trim_amount:-trim_amount, trim_amount:-trim_amount]
-#         psf_result[0].data = image
-# 
-#     print(psf_result[0].data)
-#     return psf_result
 
 def ConvolvedSceneCubeinit(self, scene, instrument, background=None, psf_library=None, webapp=False):
     '''
