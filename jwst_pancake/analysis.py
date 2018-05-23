@@ -24,7 +24,8 @@ def klip_projection(target,reflib,truncation=10):
     proj = targflat.dot(Z.T)
     return Z.T.dot(proj).reshape(target.shape)
 
-def register_to_target(reference_image,target_image,mask=None,rescale_reference=True,return_fit=False):
+def register_to_target(reference_image, target_image, mask=None,
+        rescale_reference=True, return_fit=False, verbose=False):
     '''
     Given a reference PSF and a target image, determine the misalignment
     between the two and shift the reference onto the target.
@@ -55,6 +56,8 @@ def register_to_target(reference_image,target_image,mask=None,rescale_reference=
     centered_ref = reference_image - np.nanmean(reference_image)
     centered_targ = target_image - np.nanmean(target_image)
     offx, offy, scale = align_fourierLSQ(centered_targ, centered_ref, mask)
+    if verbose:
+        print("register_to_target: found offset = ({:.5f}, {:.5f}), scale = {:5f}".format(offx, offy, scale))
     if rescale_reference:
         registered_ref = fourier_imshift(centered_ref, -offx, -offy) / scale
     else:
