@@ -172,8 +172,8 @@
       0.0
     ], 
     "psf_subtraction_xy": [
-      100.0, 
-      100.0
+      0.0, 
+      0.0
     ], 
     "background_subtraction": true, 
     "psf_subtraction": "optimal", 

@@ -117,7 +117,7 @@ def perform_calculation(calcfile):
         pandeia.engine.etc3D.DetectorSignal = CoronagraphyDetectorSignal
     else:
         pandeia.engine.psf_library.PSFLibrary = PandeiaPSFLibrary
-        pandeia.engine.instrument.PSFLibrary = PSFLibrary
+        pandeia.engine.instrument.PSFLibrary = PandeiaPSFLibrary
         pandeia.engine.astro_spectrum.ConvolvedSceneCube = PandeiaConvolvedSceneCube
         pandeia.engine.etc3D.DetectorSignal = PandeiaDetectorSignal
     if options.pandeia_fixed_seed:

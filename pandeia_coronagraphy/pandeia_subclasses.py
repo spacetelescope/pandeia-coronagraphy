@@ -15,6 +15,7 @@ import astropy.io.fits as fits
 import scipy.integrate as integrate
 import webbpsf
 from poppy import poppy_core
+from functools import wraps
 
 if sys.version_info > (3, 2):
     from functools import lru_cache
@@ -49,6 +50,84 @@ PandeiaDetectorSignal = DetectorSignal
 from .config import EngineConfiguration
 from . import templates
 
+cache_maxsize = 256     # Number of monochromatic PSFs stored in an LRU cache
+                        # Should speed up calculations that involve modifying things
+                        # like exposure time and don't actually require calculating new PSFs.
+
+def instance_method_lru_cache(*cache_args, **cache_kwargs):
+    def cache_decorator(func):
+        @wraps(func)
+        def cache_factory(self, *args, **kwargs):
+            print('creating cache')
+            instance_cache = lru_cache(*cache_args, **cache_kwargs)(func)
+            instance_cache = instance_cache.__get__(self, self.__class__)
+            setattr(self, func.__name__, instance_cache)
+            return instance_cache(*args, **kwargs)
+        return cache_factory
+    return cache_decorator
+
+
+
+@lru_cache(maxsize=cache_maxsize)
+def get_psf( wave, instrument, aperture_name, source_offset=(0, 0), otf_options=None, full_aperture=None):
+    #Make the instrument and determine the mode
+    if instrument.upper() == 'NIRCAM':
+        ins = webbpsf.NIRCam()
+        
+        # WebbPSF needs to know the filter to select the optimal 
+        # offset for the bar masks. The filter is not passed into
+        # get_psf but is stored in the full aperture name in self._psfs
+        if aperture_name in ['masklwb', 'maskswb']:
+            # Everything after the aperture name is the filter name.
+            full_aperture = self._psfs[0]['aperture_name']
+            fname = full_aperture[full_aperture.find(aperture_name) + len(aperture_name):]
+            ins.filter = fname
+        if wave > 2.5:
+            # need to toggle to LW detector.
+            ins.detector='A5'
+            ins.pixelscale = ins._pixelscale_long
+    elif instrument.upper() == 'MIRI':
+        ins = webbpsf.MIRI()
+    else:
+        raise ValueError('Only NIRCam and MIRI are supported instruments!')
+    image_mask, pupil_mask, fov_pixels, trim_fov_pixels, pix_scl = CoronagraphyPSFLibrary.parse_aperture(aperture_name)
+    ins.image_mask = image_mask
+    ins.pupil_mask = pupil_mask
+
+    # Apply any extra options if specified by the user:
+    from .engine import options
+    for key in options.on_the_fly_webbpsf_options:
+        ins.options[key] = options.on_the_fly_webbpsf_options[key]
+
+    if options.on_the_fly_webbpsf_opd is not None:
+        ins.pupilopd = options.on_the_fly_webbpsf_opd
+
+    #get offset
+    ins.options['source_offset_r'] = source_offset[0]
+    ins.options['source_offset_theta'] = source_offset[1]
+    ins.options['output_mode'] = 'oversampled'
+    ins.options['parity'] = 'odd'
+
+    psf_result = CoronagraphyPSFLibrary.calc_psf(ins, wave, source_offset, 3, pix_scl, fov_pixels, trim_fov_pixels=trim_fov_pixels)
+
+    pix_scl = psf_result[0].header['PIXELSCL']
+    upsamp = psf_result[0].header['OVERSAMP']
+    diff_limit = psf_result[0].header['DIFFLMT']
+    psf = psf_result[0].data
+
+    psf = {
+        'int': psf,
+        'wave': wave,
+        'pix_scl': pix_scl,
+        'diff_limit': diff_limit,
+        'upsamp': upsamp,
+        'instrument': instrument,
+        'aperture_name': aperture_name,
+        'source_offset': source_offset
+    }
+
+    return psf
+
 class CoronagraphyPSFLibrary(PSFLibrary, object):
     '''
     Subclass of the Pandeia PSFLibrary class, intended to allow PSFs to be generated on-the-fly
@@ -56,12 +135,16 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
     '''
     def __init__(self, path=None, aperture='all', cache=True, cache_path=None):
         print("CUSTOM PSFLibrary ACTIVATE!")
+        from .engine import options
+        self._options = options
         super(CoronagraphyPSFLibrary, self).__init__(path, aperture)
+        self.latest_on_the_fly_PSF = None
         self._cache_psf = cache
         if self._cache_psf:
             self._cache_path = cache_path
             if cache_path is None:
                 self._cache_path = os.getcwd()
+#         print("Cache Stats: {}".format(self.get_psf.cache_info()))
 
     def associate_offset_to_source(self, sources, instrument, aperture_name):
         '''
@@ -78,23 +161,40 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
 
         return psf_associations
 
+#     @instance_method_lru_cache(maxsize=cache_maxsize)
+#     @lru_cache(maxsize=cache_maxsize)
     def get_psf(self, wave, instrument, aperture_name, source_offset=(0, 0), otf_options=None, full_aperture=None, oversample=3):
         print("Getting {} {} {}...".format(instrument, aperture_name, wave), end='')
-        psf_name = 'cached_{}_{}_{}_{}_{}.fits'.format(wave, instrument, aperture_name, source_offset, oversample)
-        if self._cache_psf and self._have_psf(psf_name):
-            print("FOUND IN CACHE!")
-            psf_flux, pix_scl, diff_limit = self._get_psf(psf_name)
-            psf = {
-                'int': psf_flux,
-                'wave': wave,
-                'pix_scl': pix_scl,
-                'diff_limit': diff_limit,
-                'upsamp': oversample,
-                'instrument': instrument,
-                'aperture_name': aperture_name,
-                'source_offset': source_offset
-            }
-            return psf
+#         psf_name = 'cached_{:.5f}_{}_{}_{:.3f}_{:.3f}_{}.fits'.format(wave, instrument, aperture_name, source_offset[0], source_offset[1], oversample)
+#         if self._cache_psf and self._have_psf(psf_name):
+#             print("FOUND IN CACHE!")
+#             psf_flux, pix_scl, diff_limit = self._get_psf(psf_name)
+#             psf = {
+#                 'int': psf_flux,
+#                 'wave': wave,
+#                 'pix_scl': pix_scl,
+#                 'diff_limit': diff_limit,
+#                 'upsamp': oversample,
+#                 'instrument': instrument,
+#                 'aperture_name': aperture_name,
+#                 'source_offset': source_offset
+#             }
+#             return psf
+
+        # *****REMOVE THIS IF NOT CALLING EXTERNAL FUNCTION FOR PSF GENERATION*****
+        # At this point, splice in the cache wrapper code, since we're testing moving the lru_cache out of the class to see what happens
+        # Include the on-the-fly override options in the hash key for the lru_cache
+        otf_options = tuple(sorted(self._options.on_the_fly_webbpsf_options.items()) + [self._options.on_the_fly_webbpsf_opd,])
+
+        # this may be needed in get_psf; extract it so we can avoid
+        # passing in 'self', which isn't hashable for the cache lookup
+        full_aperture = self._psfs[0]['aperture_name']
+
+        tmp = get_psf(wave, instrument, aperture_name, source_offset, otf_options=otf_options, full_aperture=full_aperture)
+        self.latest_on_the_fly_PSF = deepcopy(tmp)
+        print("Cache Stats: {}".format(get_psf.cache_info()))
+        return tmp
+        # *****REMOVE THIS IF NOT CALLING EXTERNAL FUNCTION FOR PSF GENERATION*****
 
         #Make the instrument and determine the mode
         if instrument.upper() == 'NIRCAM':
@@ -116,18 +216,16 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
             ins = webbpsf.MIRI()
         else:
             raise ValueError('Only NIRCam and MIRI are supported instruments!')
-        image_mask, pupil_mask, fov_pixels, trim_fov_pixels, pix_scl = self._parse_aperture(aperture_name)
+        image_mask, pupil_mask, fov_pixels, trim_fov_pixels, pix_scl = self.parse_aperture(aperture_name)
         ins.image_mask = image_mask
         ins.pupil_mask = pupil_mask
 
-        # Import the options object that the engine is using.
-        from .engine import options
         # Apply any extra options if specified by the user:
-        for key in options.on_the_fly_webbpsf_options:
-            ins.options[key] = options.on_the_fly_webbpsf_options[key]
+        for key in self._options.on_the_fly_webbpsf_options:
+            ins.options[key] = self._options.on_the_fly_webbpsf_options[key]
 
-        if options.on_the_fly_webbpsf_opd is not None:
-            ins.pupilopd = options.on_the_fly_webbpsf_opd
+        if self._options.on_the_fly_webbpsf_opd is not None:
+            ins.pupilopd = self._options.on_the_fly_webbpsf_opd
 
         #get offset
         ins.options['source_offset_r'] = source_offset[0]
@@ -135,7 +233,7 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
         ins.options['output_mode'] = 'oversampled'
         ins.options['parity'] = 'odd'
     
-        psf_result = self._calc_psf(ins, wave, source_offset, 3, pix_scl, fov_pixels, trim_fov_pixels=trim_fov_pixels)
+        psf_result = self.calc_psf(ins, wave, source_offset, 3, pix_scl, fov_pixels, trim_fov_pixels=trim_fov_pixels)
 
         pix_scl = psf_result[0].header['PIXELSCL']
         upsamp = psf_result[0].header['OVERSAMP']
@@ -153,9 +251,9 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
             'source_offset': source_offset
         }
         
-        if self._cache_psf:
-            psf_result.writeto(os.path.join(self._cache_path, psf_name))
-        print("Created and saved to cache.")
+#         if self._cache_psf:
+#             psf_result.writeto(os.path.join(self._cache_path, psf_name))
+#             print("Created and saved to cache.")
 
         return psf
 
@@ -165,7 +263,7 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
         
         OVERRIDE Pandeia so as to make sure that the pixel scale comes out correctly.
         """
-        aperture_dict = self._parse_aperture(aperture_name)
+        aperture_dict = self.parse_aperture(aperture_name)
         upsample = self.get_upsamp(instrument, aperture_name)
         return aperture_dict[4]/upsample
 
@@ -185,7 +283,8 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
             psf = inf[0].data
         return psf, pix_scl, diff_limit
 
-    def _parse_aperture(self, aperture_name):
+    @staticmethod
+    def parse_aperture(aperture_name):
         '''
         Return [image mask, pupil mask, fov_pixels, trim_fov_pixels, pixelscale]
         '''
@@ -210,11 +309,13 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
     
         return aperture_dict[aperture_name]
 
-    def _calc_psf(self, ins, wave, offset, oversample, pix_scale, fov_pixels, trim_fov_pixels=None):
+    @staticmethod
+    def calc_psf(ins, wave, offset, oversample, pix_scale, fov_pixels, trim_fov_pixels=None):
         '''
         Following the treatment in pandeia_data/dev/make_psf.py to handle
         off-center PSFs for use as a kernel in later convolutions.
         '''
+#         print("Calculating {} PSF at {} with offset {}, oversample {}, scale {}, fov {}".format(ins, wave, offset, oversample, pix_scale, fov_pixels))
         # Split out offset
         offset_r, offset_theta = offset
         # Create an optical system model. This is done because, in order to determine the critical angle, we need this model, and it otherwise
@@ -228,12 +329,12 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
         critical_angle_pixels = int(np.floor(0.5 * critical_angle_arcsec / pix_scale))
 
         if offset_r > 0.:
-            # print("Offsets: r={}, theta={} (arcseconds)".format(offset_r, offset_theta))
+#             print("Offsets: r={}, theta={} (arcseconds)".format(offset_r, offset_theta))
             #roll back to center
             dx = int(np.rint( offset_r * np.sin(np.deg2rad(offset_theta)) / pix_scale ))
             dy = int(np.rint( offset_r * np.cos(np.deg2rad(offset_theta)) / pix_scale ))
             dmax = np.max([np.abs(dx), np.abs(dy)])
-            # print("Cartesian Offsets: x={}, y={}, max={} (pixels)".format(dx, dy, dmax))
+#             print("Cartesian Offsets: x={}, y={}, max={} (pixels)".format(dx, dy, dmax))
 
             psf_result = ins.calc_psf(monochromatic=wave*1e-6, oversample=oversample, fov_pixels=min(critical_angle_pixels, fov_pixels + 2*dmax))
         
