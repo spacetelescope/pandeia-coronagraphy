@@ -54,97 +54,21 @@ cache_maxsize = 256     # Number of monochromatic PSFs stored in an LRU cache
                         # Should speed up calculations that involve modifying things
                         # like exposure time and don't actually require calculating new PSFs.
 
-def instance_method_lru_cache(*cache_args, **cache_kwargs):
-    def cache_decorator(func):
-        @wraps(func)
-        def cache_factory(self, *args, **kwargs):
-            print('creating cache')
-            instance_cache = lru_cache(*cache_args, **cache_kwargs)(func)
-            instance_cache = instance_cache.__get__(self, self.__class__)
-            setattr(self, func.__name__, instance_cache)
-            return instance_cache(*args, **kwargs)
-        return cache_factory
-    return cache_decorator
-
-
-
-@lru_cache(maxsize=cache_maxsize)
-def get_psf( wave, instrument, aperture_name, source_offset=(0, 0), otf_options=None, full_aperture=None):
-    #Make the instrument and determine the mode
-    if instrument.upper() == 'NIRCAM':
-        ins = webbpsf.NIRCam()
-        
-        # WebbPSF needs to know the filter to select the optimal 
-        # offset for the bar masks. The filter is not passed into
-        # get_psf but is stored in the full aperture name in self._psfs
-        if aperture_name in ['masklwb', 'maskswb']:
-            # Everything after the aperture name is the filter name.
-            full_aperture = self._psfs[0]['aperture_name']
-            fname = full_aperture[full_aperture.find(aperture_name) + len(aperture_name):]
-            ins.filter = fname
-        if wave > 2.5:
-            # need to toggle to LW detector.
-            ins.detector='A5'
-            ins.pixelscale = ins._pixelscale_long
-    elif instrument.upper() == 'MIRI':
-        ins = webbpsf.MIRI()
-    else:
-        raise ValueError('Only NIRCam and MIRI are supported instruments!')
-    image_mask, pupil_mask, fov_pixels, trim_fov_pixels, pix_scl = CoronagraphyPSFLibrary.parse_aperture(aperture_name)
-    ins.image_mask = image_mask
-    ins.pupil_mask = pupil_mask
-
-    # Apply any extra options if specified by the user:
-    from .engine import options
-    for key in options.on_the_fly_webbpsf_options:
-        ins.options[key] = options.on_the_fly_webbpsf_options[key]
-
-    if options.on_the_fly_webbpsf_opd is not None:
-        ins.pupilopd = options.on_the_fly_webbpsf_opd
-
-    #get offset
-    ins.options['source_offset_r'] = source_offset[0]
-    ins.options['source_offset_theta'] = source_offset[1]
-    ins.options['output_mode'] = 'oversampled'
-    ins.options['parity'] = 'odd'
-
-    psf_result = CoronagraphyPSFLibrary.calc_psf(ins, wave, source_offset, 3, pix_scl, fov_pixels, trim_fov_pixels=trim_fov_pixels)
-
-    pix_scl = psf_result[0].header['PIXELSCL']
-    upsamp = psf_result[0].header['OVERSAMP']
-    diff_limit = psf_result[0].header['DIFFLMT']
-    psf = psf_result[0].data
-
-    psf = {
-        'int': psf,
-        'wave': wave,
-        'pix_scl': pix_scl,
-        'diff_limit': diff_limit,
-        'upsamp': upsamp,
-        'instrument': instrument,
-        'aperture_name': aperture_name,
-        'source_offset': source_offset
-    }
-
-    return psf
 
 class CoronagraphyPSFLibrary(PSFLibrary, object):
     '''
     Subclass of the Pandeia PSFLibrary class, intended to allow PSFs to be generated on-the-fly
     via webbpsf rather than using cached PSFs
     '''
-    def __init__(self, path=None, aperture='all', cache=True, cache_path=None):
+    def __init__(self, path=None, aperture='all', cache_path=None):
         print("CUSTOM PSFLibrary ACTIVATE!")
         from .engine import options
         self._options = options
         super(CoronagraphyPSFLibrary, self).__init__(path, aperture)
         self.latest_on_the_fly_PSF = None
-        self._cache_psf = cache
-        if self._cache_psf:
-            self._cache_path = cache_path
-            if cache_path is None:
-                self._cache_path = os.getcwd()
-#         print("Cache Stats: {}".format(self.get_psf.cache_info()))
+        self._cache_path = cache_path
+        if cache_path is None:
+            self._cache_path = os.getcwd()
 
     def associate_offset_to_source(self, sources, instrument, aperture_name):
         '''
@@ -160,42 +84,101 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
             psf_associations.append((source_offset_radius,source_offset_azimuth))
 
         return psf_associations
+    
+    @staticmethod
+    @lru_cache(maxsize=cache_maxsize)
+    def get_cached_psf( wave, instrument, aperture_name, source_offset=(0, 0), otf_options=None, full_aperture=None):
+        #Make the instrument and determine the mode
+        if instrument.upper() == 'NIRCAM':
+            ins = webbpsf.NIRCam()
+        
+            # WebbPSF needs to know the filter to select the optimal 
+            # offset for the bar masks. The filter is not passed into
+            # get_psf but is stored in the full aperture name in self._psfs
+            if aperture_name in ['masklwb', 'maskswb']:
+                # Everything after the aperture name is the filter name.
+                full_aperture = self._psfs[0]['aperture_name']
+                fname = full_aperture[full_aperture.find(aperture_name) + len(aperture_name):]
+                ins.filter = fname
+            if wave > 2.5:
+                # need to toggle to LW detector.
+                ins.detector='A5'
+                ins.pixelscale = ins._pixelscale_long
+        elif instrument.upper() == 'MIRI':
+            ins = webbpsf.MIRI()
+        else:
+            raise ValueError('Only NIRCam and MIRI are supported instruments!')
+        image_mask, pupil_mask, fov_pixels, trim_fov_pixels, pix_scl, mode = CoronagraphyPSFLibrary.parse_aperture(aperture_name)
+        ins.image_mask = image_mask
+        ins.pupil_mask = pupil_mask
 
-#     @instance_method_lru_cache(maxsize=cache_maxsize)
-#     @lru_cache(maxsize=cache_maxsize)
+        # Apply any extra options if specified by the user:
+        from .engine import options
+        for key in options.on_the_fly_webbpsf_options:
+            ins.options[key] = options.on_the_fly_webbpsf_options[key]
+
+        if options.on_the_fly_webbpsf_opd is not None:
+            ins.pupilopd = options.on_the_fly_webbpsf_opd
+
+        #get offset
+        ins.options['source_offset_r'] = source_offset[0]
+        ins.options['source_offset_theta'] = source_offset[1]
+        ins.options['output_mode'] = 'oversampled'
+        ins.options['parity'] = 'odd'
+
+        psf_result = CoronagraphyPSFLibrary.calc_psf(ins, wave, source_offset, 3, pix_scl, fov_pixels, trim_fov_pixels=trim_fov_pixels)
+
+        pix_scl = psf_result[0].header['PIXELSCL']
+        upsamp = psf_result[0].header['OVERSAMP']
+        diff_limit = psf_result[0].header['DIFFLMT']
+        psf = psf_result[0].data
+
+        psf = {
+            'int': psf,
+            'wave': wave,
+            'pix_scl': pix_scl,
+            'diff_limit': diff_limit,
+            'upsamp': upsamp,
+            'instrument': instrument,
+            'aperture_name': aperture_name,
+            'source_offset': source_offset
+        }
+
+        return psf
+
     def get_psf(self, wave, instrument, aperture_name, source_offset=(0, 0), otf_options=None, full_aperture=None, oversample=3):
-        print("Getting {} {} {}...".format(instrument, aperture_name, wave), end='')
-#         psf_name = 'cached_{:.5f}_{}_{}_{:.3f}_{:.3f}_{}.fits'.format(wave, instrument, aperture_name, source_offset[0], source_offset[1], oversample)
-#         if self._cache_psf and self._have_psf(psf_name):
-#             print("FOUND IN CACHE!")
-#             psf_flux, pix_scl, diff_limit = self._get_psf(psf_name)
-#             psf = {
-#                 'int': psf_flux,
-#                 'wave': wave,
-#                 'pix_scl': pix_scl,
-#                 'diff_limit': diff_limit,
-#                 'upsamp': oversample,
-#                 'instrument': instrument,
-#                 'aperture_name': aperture_name,
-#                 'source_offset': source_offset
-#             }
-#             return psf
+        cache = self._options.cache
+        print("Getting {} {} {}... with caching {}".format(instrument, aperture_name, wave, cache), end='')
+        if cache == 'disk':
+            psf_name = 'cached_{:.5f}_{}_{}_{:.3f}_{:.3f}_{}.fits'.format(wave, instrument, aperture_name, source_offset[0], source_offset[1], oversample)
+            if self._have_psf(psf_name):
+                print("FOUND IN CACHE!")
+                psf_flux, pix_scl, diff_limit = self._get_psf(psf_name)
+                psf = {
+                    'int': psf_flux,
+                    'wave': wave,
+                    'pix_scl': pix_scl,
+                    'diff_limit': diff_limit,
+                    'upsamp': oversample,
+                    'instrument': instrument,
+                    'aperture_name': aperture_name,
+                    'source_offset': source_offset
+                }
+                return psf
+        elif cache == 'ram':
+            # At this point, splice in the cache wrapper code, since we're testing moving the lru_cache out of the class to see what happens
+            # Include the on-the-fly override options in the hash key for the lru_cache
+            otf_options = tuple(sorted(self._options.on_the_fly_webbpsf_options.items()) + [self._options.on_the_fly_webbpsf_opd,])
 
-        # *****REMOVE THIS IF NOT CALLING EXTERNAL FUNCTION FOR PSF GENERATION*****
-        # At this point, splice in the cache wrapper code, since we're testing moving the lru_cache out of the class to see what happens
-        # Include the on-the-fly override options in the hash key for the lru_cache
-        otf_options = tuple(sorted(self._options.on_the_fly_webbpsf_options.items()) + [self._options.on_the_fly_webbpsf_opd,])
+            # this may be needed in get_psf; extract it so we can avoid
+            # passing in 'self', which isn't hashable for the cache lookup
+            full_aperture = self._psfs[0]['aperture_name']
 
-        # this may be needed in get_psf; extract it so we can avoid
-        # passing in 'self', which isn't hashable for the cache lookup
-        full_aperture = self._psfs[0]['aperture_name']
+            tmp = self.get_cached_psf(wave, instrument, aperture_name, source_offset, otf_options=otf_options, full_aperture=full_aperture)
+            print("Cache Stats: {}".format(self.get_cached_psf.cache_info()))
+            return tmp
 
-        tmp = get_psf(wave, instrument, aperture_name, source_offset, otf_options=otf_options, full_aperture=full_aperture)
-        self.latest_on_the_fly_PSF = deepcopy(tmp)
-        print("Cache Stats: {}".format(get_psf.cache_info()))
-        return tmp
-        # *****REMOVE THIS IF NOT CALLING EXTERNAL FUNCTION FOR PSF GENERATION*****
-
+        # Either disk cache miss or no caching
         #Make the instrument and determine the mode
         if instrument.upper() == 'NIRCAM':
             ins = webbpsf.NIRCam()
@@ -251,9 +234,9 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
             'source_offset': source_offset
         }
         
-#         if self._cache_psf:
-#             psf_result.writeto(os.path.join(self._cache_path, psf_name))
-#             print("Created and saved to cache.")
+        if cache == 'disk':
+            psf_result.writeto(os.path.join(self._cache_path, psf_name))
+            print("Created and saved to cache.")
 
         return psf
 
@@ -296,15 +279,15 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
         miri = webbpsf.MIRI()
 
         aperture_dict = {
-            'mask210r' : ['MASK210R','CIRCLYOT', 101, None, nc._pixelscale_short],
-            'mask335r' : ['MASK335R','CIRCLYOT', 101, None, nc._pixelscale_long],
-            'mask430r' : ['MASK430R','CIRCLYOT', 101, None, nc._pixelscale_long],
-            'masklwb' : ['MASKLWB','WEDGELYOT', 351, 101, nc._pixelscale_long],
-            'maskswb' : ['MASKSWB','WEDGELYOT', 351, 101, nc._pixelscale_short],
-            'fqpm1065' : ['FQPM1065','MASKFQPM', 81, None, miri.pixelscale],
-            'fqpm1140' : ['FQPM1140','MASKFQPM', 81, None, miri.pixelscale],
-            'fqpm1550' : ['FQPM1550','MASKFQPM', 81, None, miri.pixelscale],
-            'lyot2300' : ['LYOT2300','MASKLYOT', 81, None, miri.pixelscale]
+            'mask210r' : ['MASK210R','CIRCLYOT', 101, None, nc._pixelscale_short, 'sw_imaging'],
+            'mask335r' : ['MASK335R','CIRCLYOT', 101, None, nc._pixelscale_long, 'lw_imaging'],
+            'mask430r' : ['MASK430R','CIRCLYOT', 101, None, nc._pixelscale_long, 'lw_imaging'],
+            'masklwb' : ['MASKLWB','WEDGELYOT', 351, 101, nc._pixelscale_long, 'lw_imaging'],
+            'maskswb' : ['MASKSWB','WEDGELYOT', 351, 101, nc._pixelscale_short, 'sw_imaging'],
+            'fqpm1065' : ['FQPM1065','MASKFQPM', 81, None, miri.pixelscale, 'imaging'],
+            'fqpm1140' : ['FQPM1140','MASKFQPM', 81, None, miri.pixelscale, 'imaging'],
+            'fqpm1550' : ['FQPM1550','MASKFQPM', 81, None, miri.pixelscale, 'imaging'],
+            'lyot2300' : ['LYOT2300','MASKLYOT', 81, None, miri.pixelscale, 'imaging']
             }
     
         return aperture_dict[aperture_name]

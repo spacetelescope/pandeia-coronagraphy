@@ -18,7 +18,23 @@ class EngineConfiguration(object):
         self._on_the_fly_webbpsf_options = {}
         self._on_the_fly_webbpsf_opd = None
         self._pandeia_fixed_seed = False
+        self._cache = 'ram'
         self.verbose=False
+    
+    @property
+    def cache(self):
+        '''
+        Caching can currently be done one of three ways:
+            - LRU RAM cache ('ram')
+            - On-disk cache ('disk')
+            - No caching ('none')
+        '''
+        return self._cache
+    
+    @cache.setter
+    def cache(self, value):
+        if value in ['none', 'disk', 'ram']:
+            self._cache = value
     
     @property
     def wave_sampling(self):

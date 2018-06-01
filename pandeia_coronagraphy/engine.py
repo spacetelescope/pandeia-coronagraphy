@@ -25,10 +25,6 @@ import pandeia
 from pandeia.engine.instrument_factory import InstrumentFactory
 from pandeia.engine.psf_library import PSFLibrary
 from pandeia.engine.psf_library import PSFLibrary as PandeiaPSFLibrary
-pandeia_get_psf = PSFLibrary.get_psf
-pandeia_associate_offset_to_source = PSFLibrary.associate_offset_to_source #MOD 1
-pandeia_get_upsamp = PSFLibrary.get_upsamp
-pandeia_get_pix_scale = PSFLibrary.get_pix_scale
 from pandeia.engine.perform_calculation import perform_calculation as pandeia_calculation
 from pandeia.engine.observation import Observation
 pandeia_seed = Observation.get_random_seed
@@ -126,10 +122,9 @@ def perform_calculation(calcfile):
         pandeia.engine.observation.Observation.get_random_seed = random_seed
 
     calcfile = deepcopy(calcfile)
+    aperture_dict = CoronagraphyPSFLibrary.parse_aperture(calcfile['configuration']['instrument']['aperture'])
+    calcfile['configuration']['instrument']['mode'] = aperture_dict[5]
     
-    # print("perform_calculation")
-    # print("Calculation: {}".format(calcfile['scene']))
-
     with warnings.catch_warnings():
         warnings.filterwarnings('ignore', category = np.VisibleDeprecationWarning) # Suppress float-indexing warnings
         results = pandeia_calculation(calcfile)
@@ -140,421 +135,6 @@ def perform_calculation(calcfile):
 
     return results
 
-def associate_offset_to_source(self, sources, instrument, aperture_name):
-    '''
-    Added azimuth information for use with webbpsf. Pandeia currently does not calculate 
-    the PA and assumes azimuthal symmetry resulting in incorrect calculations when using 
-    the bar coronagraph. 
-    '''
-#     print("Associate Offsets to Source:")
-#     for source in sources:
-#         print("Source {}: position {}, shape {}, spectrum {}".format(source.id, source.position, source.shape, source.spectrum))
-    psf_offsets = self.get_offsets(instrument, aperture_name)
-    # print("PSF Offsets: {}".format(psf_offsets))
-    psf_associations = []
-    for source in sources:
-        # print("Offsets: x={}, y={} (pixels)".format(source.position['x_offset'], source.position['y_offset']))
-        # Currently, we only associate radius, not angle.   
-        source_offset_radius = np.sqrt(source.position['x_offset']**2. + source.position['y_offset']**2.)
-        source_offset_azimuth = 360*(np.pi+np.arctan2(source.position['x_offset'],source.position['y_offset']))/2/np.pi
-        # print("Offsets: r={}, theta={} (arcseconds)".format(source_offset_radius, source_offset_azimuth))
-        psf_associations.append((source_offset_radius,source_offset_azimuth))
-
-    return psf_associations
-
-def get_psf_cache_wrapper(self,*args,**kwargs):
-    '''
-    An additional layer to allow the use of lru_cache on
-    on-the-fly PSFs (which requires hashable inputs,
-    and should not include the 'self' argument that
-    was added in pandeia 1.1.1...
-
-    '''
-    global latest_on_the_fly_PSF
-
-
-    # Include the on-the-fly override options in the hash key for the lru_cache
-    otf_options = tuple(sorted(options.on_the_fly_webbpsf_options.items()) + [options.on_the_fly_webbpsf_opd,])
-
-    # this may be needed in get_psf; extract it so we can avoid
-    # passing in 'self', which isn't hashable for the cache lookup
-    full_aperture = self._psfs[0]['aperture_name']
-
-    if options.verbose:
-        print("Getting PSF for: {}, {}, options={}, aperture={}".format( args, kwargs, otf_options, full_aperture))
-
-    tmp = get_psf(otf_options=otf_options, full_aperture=full_aperture, *args, **kwargs)
-    latest_on_the_fly_PSF = deepcopy(tmp)
-    return tmp
-
-
-@lru_cache(maxsize=cache_maxsize)
-def get_psf( wave, instrument, aperture_name, source_offset=(0, 0), otf_options=None,
-        full_aperture=None):
-    #Make the instrument and determine the mode
-    if instrument.upper() == 'NIRCAM':
-        ins = webbpsf.NIRCam()
-        
-        # WebbPSF needs to know the filter to select the optimal 
-        # offset for the bar masks. The filter is not passed into
-        # get_psf but is stored in the full aperture name in self._psfs
-        if aperture_name in ['masklwb', 'maskswb']:
-            # Everything after the aperture name is the filter name.
-            full_aperture = self._psfs[0]['aperture_name']
-            fname = full_aperture[full_aperture.find(aperture_name) + len(aperture_name):]
-            ins.filter = fname
-        if wave > 2.5:
-            # need to toggle to LW detector.
-            ins.detector='A5'
-            ins.pixelscale = ins._pixelscale_long
-    elif instrument.upper() == 'MIRI':
-        ins = webbpsf.MIRI()
-    else:
-        raise ValueError('Only NIRCam and MIRI are supported instruments!')
-    image_mask, pupil_mask, fov_pixels, trim_fov_pixels, pix_scl = parse_aperture(aperture_name)
-    ins.image_mask = image_mask
-    ins.pupil_mask = pupil_mask
-
-    # Apply any extra options if specified by the user:
-    for key in options.on_the_fly_webbpsf_options:
-        ins.options[key] = options.on_the_fly_webbpsf_options[key]
-
-    if options.on_the_fly_webbpsf_opd is not None:
-        ins.pupilopd = options.on_the_fly_webbpsf_opd
-
-    #get offset
-    ins.options['source_offset_r'] = source_offset[0]
-    ins.options['source_offset_theta'] = source_offset[1]
-    ins.options['output_mode'] = 'oversampled'
-    ins.options['parity'] = 'odd'
-    
-    # print("get_psf")
-    # print("Offsets: r={}, theta={} (arcseconds)".format(source_offset[0], source_offset[1]))
-    
-    optsys = ins._getOpticalSystem(fft_oversample=3, detector_oversample=3, fov_arcsec=None, fov_pixels=fov_pixels)
-    sf = (1./(optsys.planes[0].pixelscale * 2 * units.pixel)).to(1./units.meter).value
-    critical_angle_arcsec = wave*1.e-6*sf*poppy_core._RADIANStoARCSEC
-    critical_angle_pixels = int(np.floor(0.5 * critical_angle_arcsec / pix_scl))
-    fov_pix = min(fov_pixels, critical_angle_pixels)
-    trim_fov_pix = min(trim_fov_pixels, critical_angle_pixels)
-
-    psf_result = calc_psf_and_center(ins, wave, source_offset[0], source_offset[1], 3, pix_scl, fov_pix, trim_fov_pixels=trim_fov_pix)
-
-    pix_scl = psf_result[0].header['PIXELSCL']
-    upsamp = psf_result[0].header['OVERSAMP']
-    diff_limit = psf_result[0].header['DIFFLMT']
-    psf = psf_result[0].data
-
-    psf = {
-        'int': psf,
-        'wave': wave,
-        'pix_scl': pix_scl,
-        'diff_limit': diff_limit,
-        'upsamp': upsamp,
-        'instrument': instrument,
-        'aperture_name': aperture_name,
-        'source_offset': source_offset
-    }
-    print("Creating PSF for {} {} at {} with pixel scale {} and oversample {}".format(instrument, aperture_name, wave, pix_scl, upsamp))
-
-    return psf
-
-def get_upsamp(self, instrument, aperture_name):
-    """
-    Get PSF upsampling for given instrument/aperture
-
-    Parameters
-    ----------
-    instrument: str
-        Instrument name
-    aperture_name: str
-        Name of instrument aperture
-
-    Returns
-    -------
-    upsamp: int
-        PSF upsampling factor
-    """
-#     return 3
-    wids, psf_waves = self.get_values('wave', instrument, aperture_name)
-    upsamp = self._psfs[wids[0]]['upsamp']
-    return upsamp
-
-def get_pix_scale(self, instrument, aperture_name):
-    """
-    Get PSF pixel scale for given instrument/aperture
-
-    Parameters
-    ----------
-    instrument: str
-        Instrument name
-    aperture_name: str
-        Name of instrument aperture
-
-    Returns
-    -------
-    pix_scl: float
-        Pixel scale of the PSF in arcsec/pixel
-    """
-    aperture_dict = parse_aperture(aperture_name)
-    upsample = self.get_upsamp(instrument, aperture_name)
-    return aperture_dict[4]/upsample
-#     wids, psf_waves = self.get_values('wave', instrument, aperture_name)
-#     pix_scl = self._psfs[wids[0]]['pix_scl']
-#     return pix_scl
-
-def parse_aperture(aperture_name):
-    '''
-    Return [image mask, pupil mask, fov_pixels, trim_fov_pixels, pixelscale]
-    '''
-    
-    aperture_keys = ['mask210r','mask335r','mask430r','masklwb','maskswb',
-                     'fqpm1065','fqpm1140','fqpm1550','lyot2300']
-    assert aperture_name in aperture_keys, \
-        'Aperture {} not recognized! Must be one of {}'.format(aperture_name, aperture_keys)
-
-    nc = webbpsf.NIRCam()
-    miri = webbpsf.MIRI()
-
-    aperture_dict = {
-        'mask210r' : ['MASK210R','CIRCLYOT', 101, None, nc._pixelscale_short],
-        'mask335r' : ['MASK335R','CIRCLYOT', 101, None, nc._pixelscale_long],
-        'mask430r' : ['MASK430R','CIRCLYOT', 101, None, nc._pixelscale_long],
-        'masklwb' : ['MASKLWB','WEDGELYOT', 351, 101, nc._pixelscale_long],
-        'maskswb' : ['MASKSWB','WEDGELYOT', 351, 101, nc._pixelscale_short],
-        'fqpm1065' : ['FQPM1065','MASKFQPM', 81, None, miri.pixelscale],
-        'fqpm1140' : ['FQPM1140','MASKFQPM', 81, None, miri.pixelscale],
-        'fqpm1550' : ['FQPM1550','MASKFQPM', 81, None, miri.pixelscale],
-        'lyot2300' : ['LYOT2300','MASKLYOT', 81, None, miri.pixelscale]
-        }
-    
-    print("{} pixel scale is {}".format(aperture_name, aperture_dict[aperture_name][4]))
-    
-    return aperture_dict[aperture_name]
-
-def calc_psf_and_center(ins, wave, offset_r, offset_theta, oversample, pix_scale, fov_pixels, trim_fov_pixels=None):
-    '''
-    Following the treatment in pandeia_data/dev/make_psf.py to handle
-    off-center PSFs for use as a kernel in later convolutions.
-    '''
-
-    # Create an optical system model. This is done because, in order to determine the critical angle, we need this model, and it otherwise
-    #    wouldn't be generated until the PSF itself is generated. In this case, we want to generate the model early because we want to make
-    #    sure that the observation *isn't* over the critical angle *before* generating the PSF
-    optsys = ins._getOpticalSystem(fft_oversample=3, detector_oversample=3, fov_arcsec=None, fov_pixels=fov_pixels)
-    # determine the spatial frequency which is Nyquist sampled by the input pupil.
-    # convert this to units of cycles per meter and make it not a Quantity
-    sf = (1./(optsys.planes[0].pixelscale * 2 * units.pixel)).to(1./units.meter).value
-    critical_angle_arcsec = wave*1.e-6*sf*poppy_core._RADIANStoARCSEC
-    critical_angle_pixels = int(np.floor(0.5 * critical_angle_arcsec / pix_scale))
-
-    if offset_r > 0.:
-        # print("Offsets: r={}, theta={} (arcseconds)".format(offset_r, offset_theta))
-        #roll back to center
-        dx = int(np.rint( offset_r * np.sin(np.deg2rad(offset_theta)) / pix_scale ))
-        dy = int(np.rint( offset_r * np.cos(np.deg2rad(offset_theta)) / pix_scale ))
-        dmax = np.max([np.abs(dx), np.abs(dy)])
-        # print("Cartesian Offsets: x={}, y={}, max={} (pixels)".format(dx, dy, dmax))
-
-        # pandeia forces offset to nearest integer subsampled pixel.
-        # At the risk of having subpixel offsets in the recentering,
-        # I'm not sure we want to do this in order to capture
-        # small-scale spatial variations properly.
-        #ins.options['source_offset_r'] = np.sqrt(dx**2 + dy**2) * pix_scale
-        
-        psf_result = ins.calc_psf(monochromatic=wave*1e-6, oversample=oversample, fov_pixels=min(critical_angle_pixels, fov_pixels + 2*dmax))
-        
-        image = psf_result[0].data
-        # print("Calculated Size: {}".format(image.shape))
-        # print("Maximum value {} at {}".format(np.max(image), np.unravel_index(image.argmax(), image.shape)))
-        # print("Moving image by ({},{})".format(dx*oversample, -dy*oversample))
-        image = np.roll(image, dx * oversample, axis=1)
-        image = np.roll(image, -dy * oversample, axis=0)
-        # print("Maximum value {} at {}".format(np.max(image), np.unravel_index(image.argmax(), image.shape)))
-        # print("Taking image[{}:{},{}:{}]".format(dmax * oversample, (fov_pixels + dmax) * oversample, dmax * oversample, (fov_pixels + dmax) * oversample))
-        image = image[dmax * oversample:(fov_pixels + dmax) * oversample,
-                      dmax * oversample:(fov_pixels + dmax) * oversample]
-        # print("Final Size: {}".format(image.shape))
-        # print("Maximum value {} at {}".format(np.max(image), np.unravel_index(image.argmax(), image.shape)))
-        #trim if requested
-        if trim_fov_pixels is not None:
-            trim_amount = int(oversample * (fov_pixels - trim_fov_pixels) / 2)
-            image = image[trim_amount:-trim_amount, trim_amount:-trim_amount]
-        psf_result[0].data = image
-    else:
-        psf_result = ins.calc_psf(monochromatic=wave*1e-6, oversample=oversample, fov_pixels=min(critical_angle_pixels, fov_pixels))
-
-    return psf_result
-
-def ConvolvedSceneCubeinit(self, scene, instrument, background=None, psf_library=None, webapp=False):
-    '''
-    An almost exact copy of pandeia.engine.astro_spectrum.ConvolvedSceneCube.__init__,
-    unfortunately reproduced here to circumvent the wave sampling behavior.
-
-    See the nw_maximal variable toward the end of this function. It's now controlled
-    by options.wave_sampling defined in this module.
-    '''
-    self.warnings = {}
-    self.scene = scene
-    self.psf_library = psf_library
-    self.aper_width = instrument.get_aperture_pars()['disp']
-    self.aper_height = instrument.get_aperture_pars()['xdisp']
-    self.multishutter = instrument.get_aperture_pars()['multishutter']
-    nslice_str = instrument.get_aperture_pars()['nslice']
-
-    if nslice_str is not None:
-        self.nslice = int(nslice_str)
-    else:
-        self.nslice = 1
-
-    self.instrument = instrument
-    self.background = background
-
-    self.fov_size = self.get_fov_size()
-
-    # Figure out what the relevant wavelength range is, given the instrument mode
-    wrange = self.current_instrument.get_wave_range()
-
-    self.source_spectra = []
-
-    # run through the sources and check their wavelength extents. warn if they fall short of the
-    # current instrument configuration's range.
-    mins = []
-    maxes = []
-    key = None
-    for i, src in enumerate(scene.sources):
-        spectrum = AstroSpectrum(src, webapp=webapp)
-        self.warnings.update(spectrum.warnings)
-        smin = spectrum.wave.min()
-        smax = spectrum.wave.max()
-        if smin > wrange['wmin']:
-            if smin > wrange['wmax']:
-                key = "spectrum_missing_red"
-                msg = warning_messages[key] % (smin, smax, wrange['wmax'])
-                self.warnings["%s_%s" % (key, i)] = msg
-            else:
-                key = "wavelength_truncated_blue"
-                msg = warning_messages[key] % (smin, wrange['wmin'])
-                self.warnings["%s_%s" % (key, i)] = msg
-        if smax < wrange['wmax']:
-            if smax < wrange['wmin']:
-                key = "spectrum_missing_blue"
-                msg = warning_messages[key] % (smin, smax, wrange['wmin'])
-                self.warnings["%s_%s" % (key, i)] = msg
-            else:
-                key = "wavelength_truncated_red"
-                msg = warning_messages[key] % (smax, wrange['wmax'])
-                self.warnings["%s_%s" % (key, i)] = msg
-
-        mins.append(smin)
-        maxes.append(smax)
-
-    wmin = max([np.array(mins).min(), wrange['wmin']])
-    wmax = min([np.array(maxes).max(), wrange['wmax']])
-
-    # make sure we have something within range and error out otherwise
-    if wmax < wrange['wmin'] or wmin > wrange['wmax']:
-        msg = "No wavelength overlap between source_spectra [%.2f, %.2f] and instrument [%.2f, %.2f]." % (
-            np.array(mins).min(),
-            np.array(maxes).max(),
-            wrange['wmin'],
-            wrange['wmax']
-        )
-        raise RangeError(value=msg)
-
-    # warn if partial overlap between combined wavelength range of all sources and the instrument's wrange
-    if wmin != wrange['wmin'] or wmax != wrange['wmax']:
-        key = "scene_range_truncated"
-        self.warnings[key] = warning_messages[key] % (wmin, wmax, wrange['wmin'], wrange['wmax'])
-
-    """
-    Trim spectrum and do the spectral convolution here on a per-spectrum basis.  Most efficient to do it here
-    before the wavelength sets are merged.  Also easier and much more efficient than convolving
-    an axis of a 3D cube.
-    """
-    for src in scene.sources:
-        spectrum = AstroSpectrum(src, webapp=webapp)
-        # we trim here as an optimization so that we only convolve the section we need of a possibly very large spectrum
-        spectrum.trim(wrange['wmin'], wrange['wmax'])
-        spectrum = instrument.spectrometer_convolve(spectrum)
-        self.source_spectra.append(spectrum)
-
-    """
-    different spectra will have different sets of wavelengths. the obvious future
-    case will be user-supplied spectra, but this is also true for analytic spectra
-    that have different emission/absorption lines. go through each of the spectra,
-    merge all of the wavelengths sets into one, and then resample each spectrum
-    onto the combined wavelength set.
-    """
-    self.wave = self.source_spectra[0].wave
-    for s in self.source_spectra:
-        self.wave = merge_wavelengths(self.wave, s.wave)
-
-    projection_type = instrument.projection_type
-
-    """
-    For the spectral projections, we could use the pixel sampling. However, this
-    may oversample the cube for input spectra with no narrow features. So we first check
-    whether the pixel sampling will give us a speed advantage. Otherwise, do not resample to
-    an unnecessarily fine wavelength grid.
-    """
-    if projection_type in ('spec', 'slitless', 'multiorder'):
-        wave_pix = instrument.get_wave_pix()
-        wave_pix_trim = wave_pix[np.where(np.logical_and(wave_pix >= wrange['wmin'],
-                                                         wave_pix <= wrange['wmax']))]
-        if wave_pix_trim.size < self.wave.size:
-            self.wave = wave_pix_trim
-
-    """
-    There is no inherently optimal sampling for imaging modes, but we resample here to
-    a reasonable number of wavelength bins if necessary. This helps keep the cube rendering reasonable
-    for large input spectra. Note that the spectrum resampling now uses the flux conserving method
-    of pysynphot.
-    """
-    if projection_type == 'image':
-        """
-        In practice a value of 200 samples within an imaging configuration's wavelength range
-        (i.e. filter bandpass) should be more than enough. Note that because we use pysynphot
-        to resample, the flux of even narrow lines is conserved.
-        """
-        if options.wave_sampling is None:
-            nw_maximal = 200 #pandeia default
-        else:
-            nw_maximal = options.wave_sampling
-        if self.wave.size > nw_maximal:
-            self.wave = np.linspace(wrange['wmin'], wrange['wmax'], nw_maximal)
-
-    self.nw = self.wave.size
-    self.total_flux = np.zeros(self.nw)
-
-    for spectrum in self.source_spectra:
-        spectrum.resample(self.wave)
-        self.total_flux += spectrum.flux
-
-    # also need to resample the background spectrum
-    if self.background is not None:
-        self.background.resample(self.wave)
-
-    self.grid, self.aperture_list, self.flux_cube_list, self.flux_plus_bg_list = self.create_flux_cube(background=self.background)
-
-    self.dist = self.grid.dist()
-    
-# pandeia.engine.astro_spectrum.ConvolvedSceneCube.__init__ = ConvolvedSceneCubeinit
-
-
-def _make_dither_weights(self):
-    '''
-    Hack to circumvent reference subtraction in pandeia,
-    which is currently incorrect, as well as turn off
-    the additional calculations for the contrast calculation.
-    This gives us about a factor of 3 in time savings.
-    '''
-    self.dither_weights = [1,0,0] #Pandeia: [1,-1,0]
-    del self.calc_type
-    
-# pandeia.engine.strategy.Coronagraphy._make_dither_weights = _make_dither_weights
-# pandeia.engine.strategy.Coronagraphy._create_weight_matrix = pandeia.engine.strategy.ImagingApPhot._create_weight_matrix
-
 def random_seed(self):
     '''
     The pandeia engine sets a fixed seed of 42.
@@ -563,3 +143,173 @@ def random_seed(self):
     #np.random.seed(None) # Reset the seed if already set
     #return np.random.randint(0, 2**32 - 1) # Find a new one
     return None
+
+def calculate_contrast(input, webapp=False):
+    """
+    This is a replacement for the Pandeia calculate_contrast function. It will only work if called
+    from pandeia_coronagraphy with an input file generated via pandeia_coronagraphy. It depends on
+    the 'scene' key in the input dictionary being replaced with 2 keys:
+        - 'target_scene': contains the target source(s)
+        - 'reference_scene': contains the reference source
+    In addition, the observing strategy will be set to imaging in order to do single calculations
+    for each run (target, reference, unocculted target).
+    
+    Note that this function returns a report instance in exactly the same way that the pandeia 
+    'calculate_contrast' function does, so it's monkey-patched directly into pandeia.
+    
+    Remaining docstring is from pandeia 'calculate_contrast' function:
+    -----
+    This is a function to do the 'forward' exposure time calculation where given a dict
+    in engine API input format we calculate the resulting coronagraphic contrast and return a Report
+    on the results.
+
+    While this method is meant for coronagraphic modes, it will work also for regular imaging modes.
+
+    Parameters
+    ----------
+    input: dict
+        Engine API format dictionary containing the information required to perform the calculation.
+    psf_ibrary : psf_library.PSFLibrary instance
+        Library of PSF files (e.g. produced by webbpsf) to be used in the calculation
+
+    Returns
+    -------
+    report.Report instance
+    """
+    warnings = {}
+    try:
+        target_scene_configuration = input['target_scene']
+        reference_scene_configuration = input['reference_scene']
+        background = input['background']
+        instrument_configuration = input['configuration']
+        strategy_configuration = input['strategy']
+        if input.get('debugarrays'):
+            debug_utils.init(input.get('debugarrays'))
+    except KeyError as e:
+        message = "Missing information required for the calculation: %s" % str(e)
+        raise EngineInputError(value=message)
+
+    # get the calculation configuration from the input or use the defaults
+    if 'calculation' in input:
+        calc_config = CalculationConfig(config=input['calculation'])
+    else:
+        calc_config = CalculationConfig()
+
+    # #### BEGIN calculation #### #
+    """
+    This section implements the Pandeia engine API.
+    """
+    # check for empty scene configuration and set it up properly if it is empty.
+    if len(scene_configuration) == 0:
+        scene_configuration = build_empty_scene()
+
+    instrument = InstrumentFactory(config=instrument_configuration, webapp=webapp)
+    warnings.update(instrument.warnings)
+
+    strategy = StrategyFactory(instrument, config=strategy_configuration, webapp=webapp)
+    
+    # Check for user-specified dithers (the contrast calculation will add an additional 2 fictional dithers).
+    if not hasattr(strategy, 'dithers') or len(strategy.dithers) != 1:
+        message = "Contrast calculations currently require a single dither " \
+                  "to be passed in the strategy, {} was passed".format(strategy.dithers)
+        raise EngineInputError(value=message)
+
+    # Create the centred target scene
+    target_scene = Scene(input=target_scene_configuration, webapp=webapp)
+    if hasattr(strategy, "scene_rotation"):
+        target_scene.sources = strategy.rotate(target_scene.sources)
+    warnings.update(target_scene.warnings)
+
+    # Create the centred reference scene
+    reference_scene = Scene(input=reference_scene_configuration, webapp=webapp)
+    if hasattr(strategy, "scene_rotation"):
+        reference_scene.sources = strategy.rotate(reference_scene.sources)
+    warnings.update(reference_scene.warnings)
+    
+    # Create the unocculted target scene
+    unocculted_scene_configuration = deepcopy(target_scene)
+    unocculted_scene = Scene(input=unocculted_scene_configuration, webapp=webapp)
+    unocculted_scene.offset({'x': strategy.unocculted_xy[0], 'y': strategy.unocculted_xy[1]})
+    if hasattr(strategy, "scene_rotation"):
+        unocculted_scene.sources = strategy.rotate(unocculted_scene.sources)
+    warnings.update(unocculted_scene.warnings)
+    
+    obset = []
+    for scene in zip(target_scene, reference_scene):
+        obset.append(observation.Observation(scene=scene, instrument=instrument, strategy=strategy, background=background, webapp=webapp))
+
+    # seed the random number generator
+    seed = obs.get_random_seed()
+    np.random.seed(seed=seed)
+
+    # Sometimes there is more than one exposure involved so implement lists for signal and noise
+    my_detector_signal_list = []
+    my_detector_noise_list = []
+    my_detector_saturation_list = []
+
+    for obs in obset:
+        # make a new deep copy of the observation for each dither so that each position is offset
+        # from the center position. otherwise the offsets get applied cumulatively via the reference.
+        o = deepcopy(obs)
+        # Calculate the signal rate in the detector plane
+        my_detector_signal = DetectorSignal(o, calc_config=calc_config, webapp=webapp)
+        my_detector_noise = DetectorNoise(my_detector_signal, o)
+
+        # Every dither has a saturation map
+        my_detector_saturation = my_detector_signal.get_saturation_mask()
+        my_detector_signal_list.append(my_detector_signal)
+        my_detector_noise_list.append(my_detector_noise)
+        my_detector_saturation_list.append(my_detector_saturation)
+
+    # We need a regular S/N of the target source
+    extracted_sn = strategy.extract(my_detector_signal_list, my_detector_noise_list)
+    warnings.update(extracted_sn['warnings'])
+
+    # Use the strategy to get the extracted contrast products
+    grid = my_detector_signal_list[0].grid
+
+    aperture = strategy.aperture_size
+    annulus = strategy.sky_annulus
+
+    # Create a list of contrast separations for which to calculate the contrast
+    bounds = grid.bounds()
+    ncontrast = strategy.ncontrast
+    contrasts = np.zeros(ncontrast)
+    contrast_separations = np.linspace(0 + aperture, bounds['xmax'] - annulus[1], ncontrast)
+    contrast_azimuth = np.radians(strategy.contrast_azimuth)
+    contrast_xys = [(separation * np.sin(contrast_azimuth),
+                     separation * np.cos(contrast_azimuth)) for separation in contrast_separations]
+
+    # Calculate contrast at each separation
+    for i, contrast_xy in enumerate(contrast_xys):
+        strategy.target_xy = contrast_xy
+        extracted = strategy.extract(my_detector_signal_list, my_detector_noise_list)
+        contrasts[i] = extracted['extracted_noise']
+    
+    extract_unocculted = strategy.extract()
+
+    # What is the flux of the unocculted star.
+    # We set the do_contrast attribute to True so the unocculted dither will be used.
+    strategy.do_contrast = True
+    strategy.on_target = [False, False, True]
+    strategy.target_xy = strategy.unocculted_xy
+    extract_unocculted = strategy.extract(my_detector_signal_list, my_detector_noise_list)
+
+    # when a source is offset to unocculted_xy, it can be bright enough to cause saturation
+    # flags to be raised.  however, since this is an "artifactual" offset, those saturation
+    # flags are bogus. the hackish fix is to pop this bogus saturation map off the list
+    # and append a new one filled with zeros.
+    bogus_sat = my_detector_saturation_list.pop()
+    my_detector_saturation_list.append(np.zeros(bogus_sat.shape))
+
+    # Contrast is relative to the unocculted on-axis star.
+    contrasts /= extract_unocculted['extracted_flux']
+    contrast_curve = [contrast_separations, contrasts]
+
+    # #### END calculation #### #
+
+    # Add the contrast curve and link relevant saturation maps to the extracted_sn dict for passing
+    extracted_sn['contrast_curve'] = contrast_curve
+
+    r = Report(input, my_detector_signal_list, my_detector_noise_list, my_detector_saturation_list, extracted_sn, warnings)
+    return r
