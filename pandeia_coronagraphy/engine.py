@@ -13,6 +13,8 @@ import warnings
 import astropy.units as units
 import astropy.io.fits as fits
 from poppy import poppy_core
+from scipy.ndimage import convolve
+from skimage import draw
 
 if sys.version_info > (3, 2):
     from functools import lru_cache
@@ -43,6 +45,7 @@ except ImportError:
 from .pandeia_subclasses import CoronagraphyPSFLibrary, CoronagraphyConvolvedSceneCube, CoronagraphyDetectorSignal
 from .config import EngineConfiguration
 from . import templates
+from . import analysis
 # from .templates import templates
 
 # Initialize the engine options
@@ -144,172 +147,208 @@ def random_seed(self):
     #return np.random.randint(0, 2**32 - 1) # Find a new one
     return None
 
-def calculate_contrast(input, webapp=False):
+def calculate_subtracted(aperture_name, target_scene, reference_scene, sgd=False, stepsize=20.e-3):
     """
-    This is a replacement for the Pandeia calculate_contrast function. It will only work if called
-    from pandeia_coronagraphy with an input file generated via pandeia_coronagraphy. It depends on
-    the 'scene' key in the input dictionary being replaced with 2 keys:
-        - 'target_scene': contains the target source(s)
-        - 'reference_scene': contains the reference source
-    In addition, the observing strategy will be set to imaging in order to do single calculations
-    for each run (target, reference, unocculted target).
+    This is a function to calculate subtracted images with an optional reference image 
+    small-grid dither (SGD). It does the following:
+        - Load one of the pandeia_coronagraphy custom templates
+        - [optional] construct SGD
+        - observe target scene
+        - for each reference observation:
+            - observe reference scene
+        - centre reference to targets
+        - create klip PSF
+        - subtract klip PSF from target image
+        - return subtracted image
+    It will return:
+        - target image
+        - list of reference images
+        - artificial PSF
+        - subtracted image
     
-    Note that this function returns a report instance in exactly the same way that the pandeia 
-    'calculate_contrast' function does, so it's monkey-patched directly into pandeia.
-    
-    Remaining docstring is from pandeia 'calculate_contrast' function:
-    -----
-    This is a function to do the 'forward' exposure time calculation where given a dict
-    in engine API input format we calculate the resulting coronagraphic contrast and return a Report
-    on the results.
-
-    While this method is meant for coronagraphic modes, it will work also for regular imaging modes.
-
     Parameters
     ----------
-    input: dict
-        Engine API format dictionary containing the information required to perform the calculation.
-    psf_ibrary : psf_library.PSFLibrary instance
-        Library of PSF files (e.g. produced by webbpsf) to be used in the calculation
+    aperture_name; string
+        Name of the convolution aperture to use (this will be used to generate the Pandeia
+        calculation other than the scene)
+    target_scene: list of dict
+        List of Pandeia-style scene dictionaries describing the target
+    reference_scene: list of dict
+        List of Pandeia-style scene dictionaries describing the reference source
+    iterations: int, default=1
+        Number of times to iterate generating TA errors and observing the target and reference
+        source
 
     Returns
     -------
-    report.Report instance
+    target: numpy array containing <iterations> detector slopes of the target
+    references: list of numpy arrays containing <iterations> detector slopes of the reference
+    psf: artificial PSF created with klip
+    subtracted: numpy array containing <iterations> reference-subtracted target images
     """
-    warnings = {}
-    try:
-        target_scene_configuration = input['target_scene']
-        reference_scene_configuration = input['reference_scene']
-        background = input['background']
-        instrument_configuration = input['configuration']
-        strategy_configuration = input['strategy']
-        if input.get('debugarrays'):
-            debug_utils.init(input.get('debugarrays'))
-    except KeyError as e:
-        message = "Missing information required for the calculation: %s" % str(e)
-        raise EngineInputError(value=message)
-
-    # get the calculation configuration from the input or use the defaults
-    if 'calculation' in input:
-        calc_config = CalculationConfig(config=input['calculation'])
+    from .scene import create_SGD, get_ta_error, offset_scene
+    from .analysis import klip_projection, register_to_target
+    aperture_reference = CoronagraphyPSFLibrary.parse_aperture(aperture_name)
+    image_mask, pupil_mask, fov_pixels, trim_fov_pixels, pix_scl, mode = aperture_reference
+    if mode == 'imaging':
+        instrument = 'miri'
     else:
-        calc_config = CalculationConfig()
+        instrument = 'nircam'
+    
+    target = load_calculation(get_template('{}_coronagraphy_template.json'.format(instrument)))
+    target['scene'] = target_scene
+    reference = deepcopy(target)
+    reference['scene'] = reference_scene
+    
+    # add a unique TA error for the target
+    errx, erry = get_ta_error()
+    offset_scene(target['scene'], errx, erry)
 
-    # #### BEGIN calculation #### #
+    # add a unique TA error for the reference
+    errx_ref, erry_ref = get_ta_error()
+    offset_scene(reference['scene'], errx_ref, erry_ref)
+    
+    if sgd:
+        sgds = create_SGD(reference, stepsize=stepsize)
+    else:
+        sgds = create_SGD(reference, stepsize=stepsize, pattern_name="SINGLE-POINT")
+
+    sgd_results = []
+    for sgd in sgds:
+        sgd_results.append(perform_calculation(sgd))
+
+    targ_results = perform_calculation(target)
+
+    target_slope = targ_results['2d']['detector']
+
+    sgd_reg = []
+    sgd_slopes = []
+    for r in sgd_results:
+        slope = r['2d']['detector']
+        sgd_slopes.append(slope)
+        reg = register_to_target(slope, target_slope, rescale_reference=True)
+        sgd_reg.append(reg)
+
+    sgd_reg = np.array(sgd_reg)
+
+    centered_target = target_slope - np.nanmean(target_slope)
+    artificialPSF = klip_projection(centered_target,sgd_reg)
+
+    sgd_sub = centered_target - artificialPSF
+    
+    output =    {
+                    'target': target_slope,
+                    'references': sgd_slopes,
+                    'psf': artificialPSF,
+                    'subtracted': sgd_sub
+                }
+
+    return output
+
+def calculate_contrast_profile(aperture_name, target_scene, reference_scene, iterations=1):
     """
-    This section implements the Pandeia engine API.
+    This is a replacement for the Pandeia calculate_contrast function. It is designed to use the
+    various internal analysis functions to do the following:
+        - Load one of the pandeia_coronagraphy custom templates
+        - Repeat <iterations> times:
+            - Run through pandeia with the target scene in place of the default scene
+            - Run through pandeia with the reference scene in place of the default scene
+        - Run through pandeia with the off-axis target
+        - Generate an aperture image
+        - Run the analysis contrast utility method
+    It will return:
+        - list of target images
+        - list of reference images
+        - off-axis image
+        - list of subtracted images
+        - normalized contrast profile (with reference bins)
+    
+    Parameters
+    ----------
+    aperture_name; string
+        Name of the convolution aperture to use (this will be used to generate the Pandeia
+        calculation other than the scene)
+    target_scene: list of dict
+        List of Pandeia-style scene dictionaries describing the target
+    reference_scene: list of dict
+        List of Pandeia-style scene dictionaries describing the reference source
+    iterations: int, default=1
+        Number of times to iterate generating TA errors and observing the target and reference
+        source
+
+    Returns
+    -------
+    targets: list of numpy arrays containing <iterations> detector slopes of the target
+    references: list of numpy arrays containing <iterations> detector slopes of the reference
+    unocculted: numpy array of the detector slopes of the unocculted source
+    subtractions: list of numpy arrays containing <iterations> reference-subtracted target images
+    contrast: list of numpy arrays containing:
+        bins: bins used for the normalized contrast profile
+        contrast: normalized contrast profile
     """
-    # check for empty scene configuration and set it up properly if it is empty.
-    if len(scene_configuration) == 0:
-        scene_configuration = build_empty_scene()
-
-    instrument = InstrumentFactory(config=instrument_configuration, webapp=webapp)
-    warnings.update(instrument.warnings)
-
-    strategy = StrategyFactory(instrument, config=strategy_configuration, webapp=webapp)
+    from .scene import get_ta_error, offset_scene
+    aperture_reference = CoronagraphyPSFLibrary.parse_aperture(aperture_name)
+    image_mask, pupil_mask, fov_pixels, trim_fov_pixels, pix_scl, mode = aperture_reference
+    if mode == 'imaging':
+        instrument = 'miri'
+    else:
+        instrument = 'nircam'
     
-    # Check for user-specified dithers (the contrast calculation will add an additional 2 fictional dithers).
-    if not hasattr(strategy, 'dithers') or len(strategy.dithers) != 1:
-        message = "Contrast calculations currently require a single dither " \
-                  "to be passed in the strategy, {} was passed".format(strategy.dithers)
-        raise EngineInputError(value=message)
-
-    # Create the centred target scene
-    target_scene = Scene(input=target_scene_configuration, webapp=webapp)
-    if hasattr(strategy, "scene_rotation"):
-        target_scene.sources = strategy.rotate(target_scene.sources)
-    warnings.update(target_scene.warnings)
-
-    # Create the centred reference scene
-    reference_scene = Scene(input=reference_scene_configuration, webapp=webapp)
-    if hasattr(strategy, "scene_rotation"):
-        reference_scene.sources = strategy.rotate(reference_scene.sources)
-    warnings.update(reference_scene.warnings)
+    target = load_calculation(get_template('{}_coronagraphy_template.json'.format(instrument)))
+    target['scene'] = target_scene
+    reference = deepcopy(target)
+    reference['scene'] = reference_scene
     
-    # Create the unocculted target scene
-    unocculted_scene_configuration = deepcopy(target_scene)
-    unocculted_scene = Scene(input=unocculted_scene_configuration, webapp=webapp)
-    unocculted_scene.offset({'x': strategy.unocculted_xy[0], 'y': strategy.unocculted_xy[1]})
-    if hasattr(strategy, "scene_rotation"):
-        unocculted_scene.sources = strategy.rotate(unocculted_scene.sources)
-    warnings.update(unocculted_scene.warnings)
+    n_observations = iterations
+    target_slopes = []
+    reference_slopes = []
+    for n in range(n_observations):
+        if options.verbose:
+            print("Iteration {} of {}".format(n+1, n_observations))
+        # Add unique target acq error to the target
+        current_target = deepcopy(target)
+        offset_scene(current_target['scene'], *get_ta_error() )
+        # Add unique target acq error to the reference
+        current_reference = deepcopy(reference)
+        offset_scene(current_reference['scene'], *get_ta_error() )
+        # Adopt a new realization of the WFE.
+        # Note that we're using the same WFE for target and reference here.
+        options.on_the_fly_webbpsf_opd = ('OPD_RevW_ote_for_NIRCam_predicted.fits', n)
+        # Calculate target and reference
+        targcalc = perform_calculation(current_target)
+        target_slopes.append(targcalc['2d']['detector'])
+        refcalc = perform_calculation(current_reference)
+        reference_slopes.append(refcalc['2d']['detector'])
+
+    offaxis = load_calculation(get_template('{}_coronagraphy_template.json'.format(instrument)))
+    offaxis['calculation']['effects']['saturation'] = False # Disable saturation
+    offset_scene(offaxis['scene'], 0.5, 0.5) #arsec
+
+    offaxis_slope = perform_calculation(offaxis)['2d']['detector']
+
+    subtraction_stack = np.zeros((n_observations,) + target_slopes[0].shape)
+    for i, (targ, ref) in enumerate(zip(target_slopes, reference_slopes)):
+        aligned_ref = analysis.register_to_target(ref, targ) # Aligned, scaled, mean-centered reference
+        subtraction_stack[i] = targ - np.nanmean(targ) - aligned_ref # Mean-center target and subtract reference
+
+    cov_matrix = analysis.covariance_matrix(subtraction_stack)
+
+    image_dim = subtraction_stack[0].shape
+    radius = 5
+    aperture_image = np.zeros(image_dim)
+    aperture_image[draw.circle((image_dim[0] - 1) // 2, (image_dim[1] - 1) // 2, radius)] = 1
+
+    bins, normalized_profile = analysis.compute_contrast(subtraction_stack, offaxis_slope, aperture_image)
     
-    obset = []
-    for scene in zip(target_scene, reference_scene):
-        obset.append(observation.Observation(scene=scene, instrument=instrument, strategy=strategy, background=background, webapp=webapp))
+    output =    {
+                    'targets': target_slopes,
+                    'references': reference_slopes,
+                    'unocculted': offaxis_slope,
+                    'subtractions': subtraction_stack,
+                    'contrast': {
+                                    'bins': bins,
+                                    'profile': normalized_profile
+                                }
+                }
 
-    # seed the random number generator
-    seed = obs.get_random_seed()
-    np.random.seed(seed=seed)
-
-    # Sometimes there is more than one exposure involved so implement lists for signal and noise
-    my_detector_signal_list = []
-    my_detector_noise_list = []
-    my_detector_saturation_list = []
-
-    for obs in obset:
-        # make a new deep copy of the observation for each dither so that each position is offset
-        # from the center position. otherwise the offsets get applied cumulatively via the reference.
-        o = deepcopy(obs)
-        # Calculate the signal rate in the detector plane
-        my_detector_signal = DetectorSignal(o, calc_config=calc_config, webapp=webapp)
-        my_detector_noise = DetectorNoise(my_detector_signal, o)
-
-        # Every dither has a saturation map
-        my_detector_saturation = my_detector_signal.get_saturation_mask()
-        my_detector_signal_list.append(my_detector_signal)
-        my_detector_noise_list.append(my_detector_noise)
-        my_detector_saturation_list.append(my_detector_saturation)
-
-    # We need a regular S/N of the target source
-    extracted_sn = strategy.extract(my_detector_signal_list, my_detector_noise_list)
-    warnings.update(extracted_sn['warnings'])
-
-    # Use the strategy to get the extracted contrast products
-    grid = my_detector_signal_list[0].grid
-
-    aperture = strategy.aperture_size
-    annulus = strategy.sky_annulus
-
-    # Create a list of contrast separations for which to calculate the contrast
-    bounds = grid.bounds()
-    ncontrast = strategy.ncontrast
-    contrasts = np.zeros(ncontrast)
-    contrast_separations = np.linspace(0 + aperture, bounds['xmax'] - annulus[1], ncontrast)
-    contrast_azimuth = np.radians(strategy.contrast_azimuth)
-    contrast_xys = [(separation * np.sin(contrast_azimuth),
-                     separation * np.cos(contrast_azimuth)) for separation in contrast_separations]
-
-    # Calculate contrast at each separation
-    for i, contrast_xy in enumerate(contrast_xys):
-        strategy.target_xy = contrast_xy
-        extracted = strategy.extract(my_detector_signal_list, my_detector_noise_list)
-        contrasts[i] = extracted['extracted_noise']
-    
-    extract_unocculted = strategy.extract()
-
-    # What is the flux of the unocculted star.
-    # We set the do_contrast attribute to True so the unocculted dither will be used.
-    strategy.do_contrast = True
-    strategy.on_target = [False, False, True]
-    strategy.target_xy = strategy.unocculted_xy
-    extract_unocculted = strategy.extract(my_detector_signal_list, my_detector_noise_list)
-
-    # when a source is offset to unocculted_xy, it can be bright enough to cause saturation
-    # flags to be raised.  however, since this is an "artifactual" offset, those saturation
-    # flags are bogus. the hackish fix is to pop this bogus saturation map off the list
-    # and append a new one filled with zeros.
-    bogus_sat = my_detector_saturation_list.pop()
-    my_detector_saturation_list.append(np.zeros(bogus_sat.shape))
-
-    # Contrast is relative to the unocculted on-axis star.
-    contrasts /= extract_unocculted['extracted_flux']
-    contrast_curve = [contrast_separations, contrasts]
-
-    # #### END calculation #### #
-
-    # Add the contrast curve and link relevant saturation maps to the extracted_sn dict for passing
-    extracted_sn['contrast_curve'] = contrast_curve
-
-    r = Report(input, my_detector_signal_list, my_detector_noise_list, my_detector_saturation_list, extracted_sn, warnings)
-    return r
+    return output

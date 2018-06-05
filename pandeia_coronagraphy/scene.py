@@ -61,6 +61,8 @@ def create_SGD(calcfile,stepsize=20.e-3, pattern_name=None):
                          (0.0,  0.010),
                          (0.0, -0.010),
                          (0.0, -0.020)]
+        elif pattern_name == "SINGLE-POINT":
+            pointings = [(0, 0)]
         else:
             raise ValueError("Unknown pattern_name value; check your input matches exactly an allowed SGD pattern in APT.")
     else:
