@@ -40,7 +40,6 @@ from pandeia.engine.pandeia_warnings import etc3d_warning_messages as warning_me
 from pandeia.engine import debug_utils
 
 from pandeia.engine.psf_library import PSFLibrary
-from pandeia.engine.astro_spectrum import ConvolvedSceneCube
 from pandeia.engine.strategy import Coronagraphy
 from pandeia.engine.constants import SPECTRAL_MAX_SAMPLES
 default_SPECTRAL_MAX_SAMPLES = SPECTRAL_MAX_SAMPLES
@@ -336,7 +335,7 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
         return psf_result
 
 
-class CoronagraphyConvolvedSceneCube(ConvolvedSceneCube):
+class CoronagraphyConvolvedSceneCube(pandeia.engine.astro_spectrum.ConvolvedSceneCube):
     '''
     This class overrides the ConvolvedSceneCube class, and instead of using SPECTRAL_MAX_SAMPLES it
     looks for a wavelength size that should be present in the 'scene' part of the template
@@ -356,6 +355,7 @@ class CoronagraphyConvolvedSceneCube(ConvolvedSceneCube):
         if self.coronagraphy_options.wave_sampling is None:
             return default_SPECTRAL_MAX_SAMPLES
         return self.coronagraphy_options.wave_sampling
+
 
 class CoronagraphyDetectorSignal(CoronagraphyConvolvedSceneCube):
     '''
