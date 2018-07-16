@@ -19,6 +19,8 @@ class EngineConfiguration(object):
         self._on_the_fly_webbpsf_opd = None
         self._pandeia_fixed_seed = False
         self._cache = 'ram'
+        self._noise = {'crs': True, 'darkcurrent': True, 'ffnoise': True, 'readnoise': True, 'rn_correlation': True}
+        self._effects = {'background': True, 'ipc': True, 'saturation': True}
         self.verbose=False
     
     @property
@@ -35,6 +37,28 @@ class EngineConfiguration(object):
     def cache(self, value):
         if value in ['none', 'disk', 'ram']:
             self._cache = value
+    
+    @property
+    def noise(self):
+        '''
+        Sets noise parameters. The default is for everything to be turned on.
+        '''
+        return self._noise
+    
+    @noise.setter
+    def noise(self, value):
+        self._noise = value
+    
+    @property
+    def effects(self):
+        '''
+        Sets pandeia effects (background, saturation, IPC). The default is for everything to be turned on.
+        '''
+        return self._effects
+    
+    @effects.setter
+    def effects(self, value):
+        self._effects = value
     
     @property
     def wave_sampling(self):

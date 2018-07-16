@@ -127,6 +127,8 @@ def perform_calculation(calcfile):
     calcfile = deepcopy(calcfile)
     aperture_dict = CoronagraphyPSFLibrary.parse_aperture(calcfile['configuration']['instrument']['aperture'])
     calcfile['configuration']['instrument']['mode'] = aperture_dict[5]
+    calcfile['calculation']['noise'] = options.noise
+    calcfule['calculation']['effects'] = options.effects
     
     with warnings.catch_warnings():
         warnings.filterwarnings('ignore', category = np.VisibleDeprecationWarning) # Suppress float-indexing warnings
