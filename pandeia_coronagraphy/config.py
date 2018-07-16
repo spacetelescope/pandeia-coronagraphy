@@ -130,3 +130,51 @@ class EngineConfiguration(object):
     @pandeia_fixed_seed.setter
     def pandeia_fixed_seed(self, value):
         self._pandeia_fixed_seed = value
+
+    def set_crs(self, value):
+        '''
+        Allows for cosmic rays to be turned on or off in the simulation
+        '''
+        self._noise['crs'] = value
+
+    def set_darkcurrent(self, value):
+        '''
+        Allows for dark current to be turned on or off in the simulation
+        '''
+        self._noise['darkcurrent'] = value
+
+    def set_ffnoise(self, value):
+        '''
+        Allows for flatfield noise to be turned on or off in the simulation
+        '''
+        self._noise['ffnoise'] = value
+
+    def set_readnoise(self, value):
+        '''
+        Allows for readnoise to be turned on or off in the simulation
+        '''
+        self._noise['readnoise'] = value
+
+    def set_rn_correlation(self, value):
+        '''
+        Allows for readnoise correlation to be turned on or off in the simulation
+        '''
+        self._noise['rn_correlation'] = value
+
+    def set_background(self, value):
+        '''
+        Allows for background counts to be turned on or off in the simulation
+        '''
+        self._effects['background'] = value
+
+    def set_ipc(self, value):
+        '''
+        Allows for inter-pixel capacitance to be turned on or off in the simulation
+        '''
+        self._effects['ipc'] = value
+
+    def set_saturation(self, value):
+        '''
+        Allows for detector saturation to be turned on or off in the simulation
+        '''
+        self._effects['saturation'] = value
