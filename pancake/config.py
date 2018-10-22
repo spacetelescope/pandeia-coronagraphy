@@ -22,6 +22,21 @@ class EngineConfiguration(object):
         self._noise = {'crs': True, 'darkcurrent': True, 'ffnoise': True, 'readnoise': True, 'rn_correlation': True}
         self._effects = {'background': True, 'ipc': True, 'saturation': True}
         self.verbose=False
+
+    @staticmethod
+    def pandeia_instrument_config(aperture):
+        aperture_dict = {
+            'mask210r' : ['CIRCLYOT', 'nircam_sw'],
+            'mask335r' : ['CIRCLYOT', 'nircam_lw'],
+            'mask430r' : ['CIRCLYOT', 'nircam_lw'],
+            'masklwb'  : ['WEDGELYOT', 'nircam_lw'],
+            'maskswb'  : ['WEDGELYOT', 'nircam_sw'],
+            'fqpm1065' : ['MASKFQPM', 'miri'],
+            'fqpm1140' : ['MASKFQPM', 'miri'],
+            'fqpm1550' : ['MASKFQPM', 'miri'],
+            'lyot2300' : ['MASKLYOT', 'miri']
+            }
+        return aperture_dict[aperture]
     
     @property
     def cache(self):

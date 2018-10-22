@@ -5,6 +5,7 @@ from __future__ import absolute_import, print_function
 from copy import deepcopy
 from glob import glob
 import json
+import logging
 import multiprocessing as mp
 import os
 import pkg_resources
@@ -60,9 +61,9 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
     via webbpsf rather than using cached PSFs
     '''
     def __init__(self, path=None, aperture='all', cache_path=None):
-        print("CUSTOM PSFLibrary ACTIVATE!")
         from .engine import options
         self._options = options
+        self._log("debug", "CUSTOM PSF LIBRARY ACTIVATE!")
         super(CoronagraphyPSFLibrary, self).__init__(path, aperture)
         self.latest_on_the_fly_PSF = None
         self._cache_path = cache_path
@@ -131,6 +132,8 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
         upsamp = psf_result[0].header['OVERSAMP']
         diff_limit = psf_result[0].header['DIFFLMT']
         psf = psf_result[0].data
+        if len(psf) == 0:
+            psf = np.ones((1,1))
 
         psf = {
             'int': psf,
@@ -147,11 +150,11 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
 
     def get_psf(self, wave, instrument, aperture_name, source_offset=(0, 0), otf_options=None, full_aperture=None, oversample=3):
         cache = self._options.cache
-        print("Getting {} {} {}... with caching {}".format(instrument, aperture_name, wave, cache), end='')
+        self._log("info", "Getting {} {} {}... with caching {}".format(instrument, aperture_name, wave, cache))
         if cache == 'disk':
             psf_name = 'cached_{:.5f}_{}_{}_{:.3f}_{:.3f}_{}.fits'.format(wave, instrument, aperture_name, source_offset[0], source_offset[1], oversample)
             if self._have_psf(psf_name):
-                print("FOUND IN CACHE!")
+                self._log("info", " Found in cache")
                 psf_flux, pix_scl, diff_limit = self._get_psf(psf_name)
                 psf = {
                     'int': psf_flux,
@@ -174,7 +177,7 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
             full_aperture = self._psfs[0]['aperture_name']
 
             tmp = self.get_cached_psf(wave, instrument, aperture_name, source_offset, otf_options=otf_options, full_aperture=full_aperture)
-            print("Cache Stats: {}".format(self.get_cached_psf.cache_info()))
+            self._log("info", " Cache Stats: {}".format(self.get_cached_psf.cache_info()))
             return tmp
 
         # Either disk cache miss or no caching
@@ -221,6 +224,8 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
         upsamp = psf_result[0].header['OVERSAMP']
         diff_limit = psf_result[0].header['DIFFLMT']
         psf = psf_result[0].data
+        if len(psf) == 0:
+            psf = np.ones((1,1))
 
         psf = {
             'int': psf,
@@ -235,7 +240,7 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
         
         if cache == 'disk':
             psf_result.writeto(os.path.join(self._cache_path, psf_name))
-            print("Created and saved to cache.")
+            self._log("info", " Created and saved to cache.")
 
         return psf
 
@@ -297,7 +302,6 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
         Following the treatment in pandeia_data/dev/make_psf.py to handle
         off-center PSFs for use as a kernel in later convolutions.
         '''
-#         print("Calculating {} PSF at {} with offset {}, oversample {}, scale {}, fov {}".format(ins, wave, offset, oversample, pix_scale, fov_pixels))
         # Split out offset
         offset_r, offset_theta = offset
         # Create an optical system model. This is done because, in order to determine the critical angle, we need this model, and it otherwise
@@ -311,12 +315,10 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
         critical_angle_pixels = int(np.floor(0.5 * critical_angle_arcsec / pix_scale))
 
         if offset_r > 0.:
-#             print("Offsets: r={}, theta={} (arcseconds)".format(offset_r, offset_theta))
             #roll back to center
             dx = int(np.rint( offset_r * np.sin(np.deg2rad(offset_theta)) / pix_scale ))
             dy = int(np.rint( offset_r * np.cos(np.deg2rad(offset_theta)) / pix_scale ))
             dmax = np.max([np.abs(dx), np.abs(dy)])
-#             print("Cartesian Offsets: x={}, y={}, max={} (pixels)".format(dx, dy, dmax))
 
             psf_result = ins.calc_psf(monochromatic=wave*1e-6, oversample=oversample, fov_pixels=min(critical_angle_pixels, fov_pixels + 2*dmax))
         
@@ -333,6 +335,19 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
             psf_result = ins.calc_psf(monochromatic=wave*1e-6, oversample=oversample, fov_pixels=min(critical_angle_pixels, fov_pixels))
 
         return psf_result
+    
+    def _log(self, level, message):
+        """
+        A bypass for the inability for Pandeia to do some internal python class serialization if the
+        class contains a logger
+        """
+        logger = logging.getLogger(__name__)
+        logger.addHandler(logging.StreamHandler(sys.stderr))
+        logger.setLevel(logging.WARNING)
+        if self._options.verbose:
+            logger.setLevel(logging.DEBUG)
+        logging_fn = getattr(logger, level)
+        logging_fn(message)
 
 
 class CoronagraphyConvolvedSceneCube(pandeia.engine.astro_spectrum.ConvolvedSceneCube):
@@ -341,9 +356,10 @@ class CoronagraphyConvolvedSceneCube(pandeia.engine.astro_spectrum.ConvolvedScen
     looks for a wavelength size that should be present in the 'scene' part of the template
     '''
     def __init__(self, scene, instrument, background=None, psf_library=None, webapp=False):
-        print("CORONAGRAPHY SCENE CUBE ACTIVATE!")
-        from .engine import get_options
-        self.coronagraphy_options = get_options()
+        from .engine import options
+        self.coronagraphy_options = options
+        self._options = options
+        self._log("debug", "CORONAGRAPHY SCENE CUBE ACTIVATE!")
         pandeia.engine.astro_spectrum.SPECTRAL_MAX_SAMPLES = self._max_samples
         super(CoronagraphyConvolvedSceneCube, self).__init__(scene, instrument, background, psf_library, webapp)
 
@@ -355,6 +371,19 @@ class CoronagraphyConvolvedSceneCube(pandeia.engine.astro_spectrum.ConvolvedScen
         if self.coronagraphy_options.wave_sampling is None:
             return default_SPECTRAL_MAX_SAMPLES
         return self.coronagraphy_options.wave_sampling
+
+    def _log(self, level, message):
+        """
+        A bypass for the inability for Pandeia to do some internal python class serialization if the
+        class contains a logger
+        """
+        logger = logging.getLogger(__name__)
+        logger.addHandler(logging.StreamHandler(sys.stderr))
+        logger.setLevel(logging.WARNING)
+        if self._options.verbose:
+            logger.setLevel(logging.DEBUG)
+        logging_fn = getattr(logger, level)
+        logging_fn(message)
 
 
 class CoronagraphyDetectorSignal(CoronagraphyConvolvedSceneCube):

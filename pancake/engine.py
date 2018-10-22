@@ -24,6 +24,7 @@ else:
 import numpy as np
 
 import pandeia
+from pandeia.engine.calc_utils import build_default_calc
 from pandeia.engine.instrument_factory import InstrumentFactory
 from pandeia.engine.psf_library import PSFLibrary
 from pandeia.engine.psf_library import PSFLibrary as PandeiaPSFLibrary
@@ -125,10 +126,8 @@ def perform_calculation(calcfile):
         pandeia.engine.observation.Observation.get_random_seed = random_seed
 
     calcfile = deepcopy(calcfile)
-    aperture_dict = CoronagraphyPSFLibrary.parse_aperture(calcfile['configuration']['instrument']['aperture'])
-    calcfile['configuration']['instrument']['mode'] = aperture_dict[5]
     calcfile['calculation']['noise'] = options.noise
-    calcfule['calculation']['effects'] = options.effects
+    calcfile['calculation']['effects'] = options.effects
     
     with warnings.catch_warnings():
         warnings.filterwarnings('ignore', category = np.VisibleDeprecationWarning) # Suppress float-indexing warnings
@@ -149,11 +148,47 @@ def random_seed(self):
     #return np.random.randint(0, 2**32 - 1) # Find a new one
     return None
 
-def calculate_subtracted(aperture_name, target_scene, reference_scene, sgd=False, stepsize=20.e-3):
+def process_config(raw_config, target_scene, reference_scene):
+    """
+    Process a variable that might be a file name, full JWST configuration dictionary, or instrument
+    configuration dictionary, along with optional target and reference scenes.
+    """
+    if isinstance(raw_config, str):
+        # A JSON file. In this case, it should be a full pandeia config dictionary
+        if os.path.isfile(raw_config):
+            config = load_calculation(raw_config)
+        else:
+            error_str = "Error: File {} not found".format(configuration_dict_or_filename)
+            raise FileNotFoundError(error_str)
+    elif isinstance(raw_config, dict) and "configuration" in raw_config:
+        # It's a dictionary. It contains a "configuration" key. Assume full pandeia dictionary.
+        config = deepcopy(raw_config)
+    elif isinstance(raw_config, dict):
+        instrument = raw_config["instrument"]["instrument"]
+        config = build_default_calc(jwst, instrument, "coronagraphy")
+        config['configuration']["instrument"] = deepcopy(raw_config)
+        if target_scene is None:
+            print("Warning: input configuration had no scene info, and no separate target scene was provided. Using default coronagraphy target scene.")
+    else:
+        error_str = "Invalid input {}".format(configuration_dict_or_filename)
+        raise ValueError(error_str)
+    if target_scene is not None:
+        if isinstance(target_scene, list):
+            config['scene'] = deepcopy(target_scene)
+        else:
+            config['scene'] = [deepcopy(target_scene)]
+    if reference_scene is not None:
+        if isinstance(reference_scene, list):
+            config['strategy']['psf_subtraction_source'] = deepcopy(reference_scene[0])
+        else:
+            config['strategy']['psf_subtraction_source'] = deepcopy(reference_scene)
+    return config
+
+def calculate_subtracted(raw_config, target=None, reference=None, ta_error=False, sgd=False, stepsize=20.e-3):
     """
     This is a function to calculate subtracted images with an optional reference image 
     small-grid dither (SGD). It does the following:
-        - Load one of the pandeia_coronagraphy custom templates
+        - Create a pandeia configuration file from which to build the target and reference scenes
         - [optional] construct SGD
         - observe target scene
         - for each reference observation:
@@ -170,16 +205,25 @@ def calculate_subtracted(aperture_name, target_scene, reference_scene, sgd=False
     
     Parameters
     ----------
-    aperture_name; string
-        Name of the convolution aperture to use (this will be used to generate the Pandeia
-        calculation other than the scene)
-    target_scene: list of dict
-        List of Pandeia-style scene dictionaries describing the target
-    reference_scene: list of dict
-        List of Pandeia-style scene dictionaries describing the reference source
-    iterations: int, default=1
-        Number of times to iterate generating TA errors and observing the target and reference
-        source
+    raw_config: string or dict
+        One of:
+            - file name of pandeia JSON file describing an observation
+            - pandeia configuration dictionary
+            - pandeia instrument configuration from configuration dictionary 
+              (i.e. config['configuration']['instrument'])
+    target_scene: list of dict (or dict), default None
+        List of Pandeia-style scene dictionaries describing the target. If not present, then the
+            target scene from raw_config will be used.
+    reference_scene: list of dict (or dict), default None
+        List of Pandeia-style scene dictionaries describing the reference source. If not present, 
+            then the reference scene from raw_config will be used. If a list, only the first 
+            element will be used (i.e. the reference source will be assumed to be a single element)
+    ta_error: bool, default False
+        Whether to add target acquisition error offsets to the target and reference scenes.
+    sgd: bool, default False
+        Whether to create a small-grid dither (SGD) for the reference scene.
+    stepsize: float, default 0.02
+        Size of the offsets in the SGD (if present), in arcseconds.
 
     Returns
     -------
@@ -190,25 +234,23 @@ def calculate_subtracted(aperture_name, target_scene, reference_scene, sgd=False
     """
     from .scene import create_SGD, get_ta_error, offset_scene
     from .analysis import klip_projection, register_to_target
-    aperture_reference = CoronagraphyPSFLibrary.parse_aperture(aperture_name)
-    image_mask, pupil_mask, fov_pixels, trim_fov_pixels, pix_scl, mode = aperture_reference
-    if mode == 'imaging':
-        instrument = 'miri'
-    else:
-        instrument = 'nircam'
     
-    target = load_calculation(get_template('{}_coronagraphy_template.json'.format(instrument)))
-    target['scene'] = target_scene
-    reference = deepcopy(target)
-    reference['scene'] = reference_scene
-    
-    # add a unique TA error for the target
-    errx, erry = get_ta_error()
-    offset_scene(target['scene'], errx, erry)
+    config = process_config(raw_config, target, reference)
+    config['strategy']['psf_subtraction'] = 'target_only'
 
-    # add a unique TA error for the reference
-    errx_ref, erry_ref = get_ta_error()
-    offset_scene(reference['scene'], errx_ref, erry_ref)
+    target = deepcopy(config)
+
+    reference = deepcopy(config)
+    reference['scene'] = [deepcopy(config['strategy']['psf_subtraction_source'])]
+    
+    if ta_error:
+        # add a unique TA error for the target
+        errx, erry = get_ta_error()
+        offset_scene(target['scene'], errx, erry)
+
+        # add a unique TA error for the reference
+        errx_ref, erry_ref = get_ta_error()
+        offset_scene(reference['scene'], errx_ref, erry_ref)
     
     if sgd:
         sgds = create_SGD(reference, stepsize=stepsize)
@@ -247,7 +289,7 @@ def calculate_subtracted(aperture_name, target_scene, reference_scene, sgd=False
 
     return output
 
-def calculate_contrast_profile(aperture_name, target_scene, reference_scene, iterations=1):
+def calculate_contrast(raw_config, target=None, reference=None, ta_error=True, iterations=2):
     """
     This is a replacement for the Pandeia calculate_contrast function. It is designed to use the
     various internal analysis functions to do the following:
@@ -267,13 +309,21 @@ def calculate_contrast_profile(aperture_name, target_scene, reference_scene, ite
     
     Parameters
     ----------
-    aperture_name; string
-        Name of the convolution aperture to use (this will be used to generate the Pandeia
-        calculation other than the scene)
-    target_scene: list of dict
-        List of Pandeia-style scene dictionaries describing the target
-    reference_scene: list of dict
-        List of Pandeia-style scene dictionaries describing the reference source
+    raw_config: string or dict
+        One of:
+            - file name of pandeia JSON file describing an observation
+            - pandeia configuration dictionary
+            - pandeia instrument configuration from configuration dictionary 
+              (i.e. config['configuration']['instrument'])
+    target: list of dict (or dict), default None
+        List of Pandeia-style scene dictionaries describing the target. If not present, then the
+            target scene from raw_config will be used.
+    reference: list of dict (or dict), default None
+        List of Pandeia-style scene dictionaries describing the reference source. If not present, 
+            then the reference scene from raw_config will be used. If a list, only the first 
+            element will be used (i.e. the reference source will be assumed to be a single element)
+    ta_error: bool, default False
+        Whether to add target acquisition error offsets to the target and reference scenes.
     iterations: int, default=1
         Number of times to iterate generating TA errors and observing the target and reference
         source
@@ -289,46 +339,52 @@ def calculate_contrast_profile(aperture_name, target_scene, reference_scene, ite
         contrast: normalized contrast profile
     """
     from .scene import get_ta_error, offset_scene
-    aperture_reference = CoronagraphyPSFLibrary.parse_aperture(aperture_name)
-    image_mask, pupil_mask, fov_pixels, trim_fov_pixels, pix_scl, mode = aperture_reference
-    if mode == 'imaging':
-        instrument = 'miri'
-    else:
-        instrument = 'nircam'
     
-    target = load_calculation(get_template('{}_coronagraphy_template.json'.format(instrument)))
-    target['scene'] = target_scene
-    reference = deepcopy(target)
-    reference['scene'] = reference_scene
+    capitalized_instruments = {
+                                "miri": 'MIRI',
+                                "nircam_sw": 'NIRCam',
+                                "nircam_lw": 'NIRCam',
+                                "nircam": "NIRCam"
+    }
+
+    config = process_config(raw_config, target, reference)
+    config['strategy']['psf_subtraction'] = 'target_only'
+
+    target = deepcopy(config)
+
+    reference = deepcopy(config)
+    reference['scene'] = [deepcopy(config['strategy']['psf_subtraction_source'])]
     
-    n_observations = iterations
     target_slopes = []
     reference_slopes = []
-    for n in range(n_observations):
+    for n in range(iterations):
         if options.verbose:
-            print("Iteration {} of {}".format(n+1, n_observations))
-        # Add unique target acq error to the target
+            print("Iteration {} of {}".format(n+1, iterations))
         current_target = deepcopy(target)
-        offset_scene(current_target['scene'], *get_ta_error() )
-        # Add unique target acq error to the reference
         current_reference = deepcopy(reference)
-        offset_scene(current_reference['scene'], *get_ta_error() )
+        if ta_error:
+            # Add unique target acq error to the target
+            offset_scene(current_target['scene'], *get_ta_error() )
+            # Add unique target acq error to the reference
+            offset_scene(current_reference['scene'], *get_ta_error() )
         # Adopt a new realization of the WFE.
         # Note that we're using the same WFE for target and reference here.
-        options.on_the_fly_webbpsf_opd = ('OPD_RevW_ote_for_NIRCam_predicted.fits', n)
+        ins = config['configuration']['instrument']['instrument'].lower()
+        ote_name = 'OPD_RevW_ote_for_{}_predicted.fits.gz'.format(capitalized_instruments[ins])
+        options.on_the_fly_webbpsf_opd = (ote_name, n)
         # Calculate target and reference
         targcalc = perform_calculation(current_target)
         target_slopes.append(targcalc['2d']['detector'])
         refcalc = perform_calculation(current_reference)
         reference_slopes.append(refcalc['2d']['detector'])
 
-    offaxis = load_calculation(get_template('{}_coronagraphy_template.json'.format(instrument)))
+    offaxis = deepcopy(target)
     offaxis['calculation']['effects']['saturation'] = False # Disable saturation
     offset_scene(offaxis['scene'], 0.5, 0.5) #arsec
 
     offaxis_slope = perform_calculation(offaxis)['2d']['detector']
 
-    subtraction_stack = np.zeros((n_observations,) + target_slopes[0].shape)
+    subtraction_stack = np.zeros((iterations,) + target_slopes[0].shape)
     for i, (targ, ref) in enumerate(zip(target_slopes, reference_slopes)):
         aligned_ref = analysis.register_to_target(ref, targ) # Aligned, scaled, mean-centered reference
         subtraction_stack[i] = targ - np.nanmean(targ) - aligned_ref # Mean-center target and subtract reference

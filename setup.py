@@ -11,7 +11,7 @@ from codecs import open
 from os import path
 
 here = path.abspath(path.dirname(__file__))
-NAME = 'pandeia_coronagraphy'
+NAME = 'pancake'
 
 # Get the long description from the README file
 with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
@@ -33,11 +33,11 @@ setup(
     long_description=long_description,
 
     # The project's main homepage.
-    url='https://github.com/kgorkom/pandeia_coronagraphy',
+    url='https://github.com/spacetelescope/pandeia_coronagraphy',
 
     # Author details
-    author='Kyle Van Gorkom',
-    author_email='kgorkom@stsci.edu',
+    author='Brian York',
+    author_email='york@stsci.edu',
 
     # Choose your license
     license='BSD',
@@ -59,7 +59,7 @@ setup(
 
         # Specify the Python versions you support here. In particular, ensure
         # that you indicate whether you support Python 2, Python 3 or both.
-        'Programming Language :: Python :: 2.7',
+        'Programming Language :: Python :: 3.5',
 
     ],
 
@@ -69,7 +69,7 @@ setup(
     # You can just specify the packages manually here if your project is
     # simple. Or you can use find_packages().
     packages=find_packages(),
-    package_data={'pandeia_coronagraphy.templates' : ['*.json']},
+    package_data={'pancake.templates' : ['*.json']},
 
     # Alternatively, if you want to distribute just a my_module.py, uncomment
     # this:
