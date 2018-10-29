@@ -103,6 +103,6 @@ setup(
     #   - install pip notebook in order to run notebooks
     #   - notebooks still can't import pandeia because apparently it can't see pyfftw in notebooks only.
     install_requires=['numpy>=1.15','matplotlib>=2.2','pandeia.engine>=1.2', 'webbpsf<0.7', 
-                      'poppy>=0.7', 'scikit-image>=0.14', 'pysynphot>=0.9', 'astropy>=3', 
+                      'poppy>=0.7', 'scikit-image>=0.14', 'pysynphot>=0.9', 'astropy>=2', 
                       'photutils>=0.5', "cython>=0.29", "scipy>=1"],
 )
