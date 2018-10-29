@@ -11,7 +11,7 @@ from codecs import open
 from os import path
 
 here = path.abspath(path.dirname(__file__))
-NAME = 'pancake'
+NAME = 'panCAKE'
 
 # Get the long description from the README file
 with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
@@ -19,7 +19,7 @@ with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
 
 # Get version
 with open(path.join(here, NAME, 'VERSION'), encoding='utf-8') as f:
-    version = f.read()
+    version = f.read().strip()
 
 setup(
     name=NAME,
@@ -48,7 +48,7 @@ setup(
         #   3 - Alpha
         #   4 - Beta
         #   5 - Production/Stable
-        'Development Status :: 3 - Alpha',
+        'Development Status :: 4 - Beta',
 
         # Indicate who your project is intended for
         'Intended Audience :: Developers',
@@ -79,5 +79,30 @@ setup(
     # your project is installed. For an analysis of "install_requires" vs pip's
     # requirements files see:
     # https://packaging.python.org/en/latest/requirements.html
-    install_requires=['numpy','matplotlib','pandeia.engine'],
+    #
+    # Requirements info as of 2018-10-26:
+    #   Actual things that we require:
+    #       - numpy
+    #       - matplotlib
+    #       - pandeia
+    #       - webbpsf
+    #       - poppy
+    #   Pandeia requires (but doesn't mention that it requires)
+    #       - pyfftw
+    #       - editing to work under python 3
+    #       - photutils
+    #   Errors of unknown sorts when compiling pyfftw require
+    #       - cython
+    #       - update of setuptools
+    # So, the current actual way of installing correctly is:
+    #   - create a new conda environment with python=3 and fftw (need conda forge for this)
+    #   - make sure that numpy has been installed
+    #   - make sure that cython is installed
+    #   - make sure that setuptools are updated
+    #   - install pip pyfftw via pip
+    #   - install pip notebook in order to run notebooks
+    #   - notebooks still can't import pandeia because apparently it can't see pyfftw in notebooks only.
+    install_requires=['numpy>=1.15','matplotlib>=2.2','pandeia.engine>=1.2', 'webbpsf<0.7', 
+                      'poppy>=0.7', 'scikit-image>=0.14', 'pysynphot>=0.9', 'astropy>=3', 
+                      'photutils>=0.5', "cython>=0.29", "scipy>=1"],
 )
