@@ -9,9 +9,12 @@ from setuptools import setup, find_packages
 # To use a consistent encoding
 from codecs import open
 from os import path
+from sys import version_info
 
 here = path.abspath(path.dirname(__file__))
 NAME = 'panCAKE'
+
+python_major = version_info[0]
 
 # Get the long description from the README file
 with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
@@ -102,7 +105,12 @@ setup(
     #   - install pip pyfftw via pip
     #   - install pip notebook in order to run notebooks
     #   - notebooks still can't import pandeia because apparently it can't see pyfftw in notebooks only.
-    install_requires=['numpy>=1.15','matplotlib>=2.2','pandeia.engine>=1.2', 'webbpsf<0.7', 
-                      'poppy>=0.7', 'scikit-image>=0.14', 'pysynphot>=0.9', 'astropy>=2', 
-                      'photutils>=0.4', "cython>=0.29", "scipy>=1"],
+    if python_major >= 3:
+        install_requires=['numpy>=1.15','matplotlib>=2.2','pandeia.engine>=1.2', 'webbpsf<0.7', 
+                          'scikit-image>=0.14', 'pysynphot>=0.9', 'astropy>=3', 'photutils>=0.5', 
+                          'cython>=0.29', 'scipy>=1'],
+    else:
+        install_requires=['numpy>=1.15','matplotlib>=2.2','pandeia.engine>=1.2', 'webbpsf<0.7', 
+                          'scikit-image>=0.14', 'pysynphot>=0.9', 'astropy>=2', 'photutils>=0.4', 
+                          'functools32>=3', 'cython>=0.29', 'scipy>=1'],
 )
