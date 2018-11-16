@@ -22,6 +22,15 @@ class EngineConfiguration(object):
         self._noise = {'crs': True, 'darkcurrent': True, 'ffnoise': True, 'readnoise': True, 'rn_correlation': True}
         self._effects = {'background': True, 'ipc': True, 'saturation': True}
         self.verbose=False
+        self._config = None
+    
+    @property
+    def current_config(self):
+        return self._config
+    
+    @current_config.setter
+    def current_config(self, config):
+        self._config = config
 
     @staticmethod
     def pandeia_instrument_config(aperture):
@@ -145,6 +154,20 @@ class EngineConfiguration(object):
     @pandeia_fixed_seed.setter
     def pandeia_fixed_seed(self, value):
         self._pandeia_fixed_seed = value
+    
+    @property
+    def pandeia_noise(self):
+        '''
+        Allows access to the pandeia noise configuration
+        '''
+        return self._noise
+
+    @property
+    def pandeia_effects(self):
+        '''
+        Allows access to the pandeia noise configuration
+        '''
+        return self._effects
 
     def set_crs(self, value):
         '''

@@ -128,6 +128,7 @@ def perform_calculation(calcfile):
     calcfile = deepcopy(calcfile)
     calcfile['calculation']['noise'] = options.noise
     calcfile['calculation']['effects'] = options.effects
+    options.current_config = deepcopy(calcfile)
     
     with warnings.catch_warnings():
         warnings.filterwarnings('ignore', category = np.VisibleDeprecationWarning) # Suppress float-indexing warnings
@@ -262,6 +263,7 @@ def calculate_subtracted(raw_config, target=None, reference=None, ta_error=False
         sgd_results.append(perform_calculation(sgd))
 
     targ_results = perform_calculation(target)
+    print("Target had {} NAN values".format(np.sum(np.isnan(targ_results['2d']['detector']))))
 
     target_slope = targ_results['2d']['detector']
 

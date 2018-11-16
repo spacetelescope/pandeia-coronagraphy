@@ -88,6 +88,7 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
     @staticmethod
     @lru_cache(maxsize=cache_maxsize)
     def get_cached_psf( wave, instrument, aperture_name, source_offset=(0, 0), otf_options=None, full_aperture=None):
+        from .engine import options
         #Make the instrument and determine the mode
         if instrument.upper() == 'NIRCAM':
             ins = webbpsf.NIRCam()
@@ -100,12 +101,15 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
                 full_aperture = self._psfs[0]['aperture_name']
                 fname = full_aperture[full_aperture.find(aperture_name) + len(aperture_name):]
                 ins.filter = fname
+            else:
+                ins.filter = options.current_config['configuration']['instrument']['filter']
             if wave > 2.5:
                 # need to toggle to LW detector.
                 ins.detector='A5'
                 ins.pixelscale = ins._pixelscale_long
         elif instrument.upper() == 'MIRI':
             ins = webbpsf.MIRI()
+            ins.filter = options.current_config['configuration']['instrument']['filter']
         else:
             raise ValueError('Only NIRCam and MIRI are supported instruments!')
         image_mask, pupil_mask, fov_pixels, trim_fov_pixels, pix_scl, mode = CoronagraphyPSFLibrary.parse_aperture(aperture_name)
@@ -342,7 +346,8 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
         class contains a logger
         """
         logger = logging.getLogger(__name__)
-        logger.addHandler(logging.StreamHandler(sys.stderr))
+        if not len(logger.handlers):
+            logger.addHandler(logging.StreamHandler(sys.stderr))
         logger.setLevel(logging.WARNING)
         if self._options.verbose:
             logger.setLevel(logging.DEBUG)
@@ -378,7 +383,8 @@ class CoronagraphyConvolvedSceneCube(pandeia.engine.astro_spectrum.ConvolvedScen
         class contains a logger
         """
         logger = logging.getLogger(__name__)
-        logger.addHandler(logging.StreamHandler(sys.stderr))
+        if not len(logger.handlers):
+            logger.addHandler(logging.StreamHandler(sys.stderr))
         logger.setLevel(logging.WARNING)
         if self._options.verbose:
             logger.setLevel(logging.DEBUG)
