@@ -64,6 +64,11 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
         from .engine import options
         self._options = options
         self._log("debug", "CUSTOM PSF LIBRARY ACTIVATE!")
+        if path is None:
+            if "pandeia_refdata" in os.environ:
+                tel = 'jwst'
+                ins = options.current_config['configuration']['instrument']['instrument'].lower()
+                path = os.path.join(os.environ['pandeia_refdata'], tel, ins, 'psfs')
         super(CoronagraphyPSFLibrary, self).__init__(path, aperture)
         self.latest_on_the_fly_PSF = None
         self._cache_path = cache_path
