@@ -99,7 +99,6 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
         #Make the instrument and determine the mode
         if instrument.upper() == 'NIRCAM':
             ins = webbpsf.NIRCam()
-            print(ins.pupil)
         
             # WebbPSF needs to know the filter to select the optimal 
             # offset for the bar masks. The filter is not passed into
