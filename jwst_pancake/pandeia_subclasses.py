@@ -99,6 +99,7 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
         #Make the instrument and determine the mode
         if instrument.upper() == 'NIRCAM':
             ins = webbpsf.NIRCam()
+            print(ins.pupil)
         
             # WebbPSF needs to know the filter to select the optimal 
             # offset for the bar masks. The filter is not passed into
@@ -170,7 +171,6 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
         return psf
 
     def get_psf(self, wave, instrument, aperture_name, oversample=None, source_offset=(0, 0), otf_options=None, full_aperture=None):
-        print("ACTIVATING GET_PSF FUNCTION!")
         cache = self._options.cache
         if oversample is None:
             oversample = self._options.on_the_fly_oversample
