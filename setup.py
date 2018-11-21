@@ -12,7 +12,7 @@ from os import path
 from sys import version_info
 
 here = path.abspath(path.dirname(__file__))
-NAME = 'stsci_pancake'
+NAME = 'jwst_pancake'
 
 python_major = version_info[0]
 if python_major >= 3:
@@ -81,7 +81,7 @@ setup(
     # You can just specify the packages manually here if your project is
     # simple. Or you can use find_packages().
     packages=find_packages(),
-    package_data={'stsci_pancake.templates' : ['*.json']},
+    package_data={'jwst_pancake.templates' : ['*.json']},
 
     # Alternatively, if you want to distribute just a my_module.py, uncomment
     # this:
