@@ -129,14 +129,14 @@ def perform_calculation(calcfile):
     else:
         pandeia.engine.observation.Observation.get_random_seed = random_seed
 
-    calcfile = deepcopy(calcfile)
-    calcfile['calculation']['noise'] = options.noise
-    calcfile['calculation']['effects'] = options.effects
-    options.current_config = deepcopy(calcfile)
+    config = deepcopy(calcfile)
+    config['calculation']['noise'] = options.noise
+    config['calculation']['effects'] = options.effects
+    options.current_config = deepcopy(config)
     
     with warnings.catch_warnings():
         warnings.filterwarnings('ignore', category = np.VisibleDeprecationWarning) # Suppress float-indexing warnings
-        results = pandeia_calculation(calcfile)
+        results = pandeia_calculation(config)
 
     # Reset the fixed seed state set by the pandeia engine
     # to avoid unexpected results elsewhere

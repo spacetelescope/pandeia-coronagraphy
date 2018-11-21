@@ -154,6 +154,7 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
         return psf
 
     def get_psf(self, wave, instrument, aperture_name, oversample=None, source_offset=(0, 0), otf_options=None, full_aperture=None):
+        print("ACTIVATING GET_PSF FUNCTION!")
         cache = self._options.cache
         if oversample is None:
             oversample = self._options.on_the_fly_oversample
