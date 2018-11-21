@@ -4,6 +4,7 @@ from . import scene
 from . import analysis
 from . import engine
 from . import transformations
+from . import utilities
 
 
 import os
