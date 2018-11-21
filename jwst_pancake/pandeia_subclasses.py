@@ -18,10 +18,12 @@ import webbpsf
 from poppy import poppy_core
 from functools import wraps
 
-if sys.version_info > (3, 2):
+if sys.version_info[0] >= 3:
     from functools import lru_cache
+    from io import StringIO
 else:
     from functools32 import lru_cache
+    from cStringIO import StringIO
 
 import numpy as np
 
@@ -118,6 +120,9 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
         else:
             raise ValueError('Only NIRCam and MIRI are supported instruments!')
         image_mask, pupil_mask, fov_pixels, trim_fov_pixels, pix_scl, mode = CoronagraphyPSFLibrary.parse_aperture(aperture_name)
+        if sys.version_info[0] < 3:
+            image_mask = "{}".format(image_mask)
+            pupil_mask = "{}".format(pupil_mask)
         ins.image_mask = image_mask
         ins.pupil_mask = pupil_mask
 
