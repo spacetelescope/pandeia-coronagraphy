@@ -129,10 +129,16 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
         # Apply any extra options if specified by the user:
         from .engine import options
         for key in options.on_the_fly_webbpsf_options:
-            ins.options[key] = options.on_the_fly_webbpsf_options[key]
+            if sys.version_info[0] < 3:
+                ins.options[key] = "{}".format(options.on_the_fly_webbpsf_options[key])
+            else:
+                ins.options[key] = options.on_the_fly_webbpsf_options[key]
 
         if options.on_the_fly_webbpsf_opd is not None:
-            ins.pupilopd = options.on_the_fly_webbpsf_opd
+            if sys.version_info[0] < 3:
+                ins.pupilopd = "{}".format(options.on_the_fly_webbpsf_opd)
+            else:
+                ins.pupilopd = options.on_the_fly_webbpsf_opd
 
         #get offset
         ins.options['source_offset_r'] = source_offset[0]
