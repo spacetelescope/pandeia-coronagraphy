@@ -356,7 +356,10 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
         logger.setLevel(logging.WARNING)
         if self._options.verbose:
             logger.setLevel(logging.DEBUG)
-        logging_fn = getattr(logger, level)
+        if not hasattr(logger, level.lower()):
+            print("Logger has no function {}".format(level.lower()))
+            print("Message is: {}".format(message))
+        logging_fn = getattr(logger, level.lower())
         logging_fn(message)
 
 
