@@ -374,8 +374,7 @@ class CoronagraphyConvolvedSceneCube(pandeia.engine.astro_spectrum.ConvolvedScen
         self._options = options
         self._log("debug", "CORONAGRAPHY SCENE CUBE ACTIVATE!")
         pandeia.engine.astro_spectrum.SPECTRAL_MAX_SAMPLES = self._max_samples
-        super(CoronagraphyConvolvedSceneCube, self).__init__(scene, instrument, background, psf_library, webapp)
-        self.psf_library = CoronagraphyPSFLibrary()
+        super(CoronagraphyConvolvedSceneCube, self).__init__(scene, instrument, background, CoronagraphyPSFLibrary(), webapp)
 
     @property
     def _max_samples(self):
