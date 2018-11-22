@@ -4,6 +4,8 @@ from __future__ import absolute_import, print_function
 This file contains a number of pancake utilities which may be useful in running pancake.
 """
 
+import os
+
 from pandeia.engine.psf_library import PSFLibrary
 from pandeia.engine.source import Source
 
@@ -20,7 +22,12 @@ def determine_pandeia_offset(config):
         scene_sources.append(Source(config=source))
     if 'psf_subtraction_source' in config['strategy']:
         reference_sources.append(Source(config=config['strategy']['psf_subtraction_source']))
-    library = PSFLibrary()
+    path = None
+    if "pandeia_refdata" in os.environ:
+        tel = 'jwst'
+        ins = config['configuration']['instrument']['instrument'].lower()
+        path = os.path.join(os.environ['pandeia_refdata'], tel, ins, 'psfs')
+    library = PSFLibrary(path=path)
     scene_offsets = library.associate_offset_to_source(scene_sources, instrument, aperture)
     scene_offsets = library.associate_offset_to_source(scene_sources, instrument, aperture)
     return {'scene': scene_offsets, 'reference': reference_offsets}
