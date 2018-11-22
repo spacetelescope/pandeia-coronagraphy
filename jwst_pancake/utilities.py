@@ -13,8 +13,8 @@ def determine_pandeia_offset(config):
     configuration (for comparison with the offset that pancake would use in on-the-fly PSF
     generation).
     """
-    instrument = config['configuration']['instrument']
-    aperture = config['configuration']['aperture']
+    instrument = config['configuration']['instrument']['instrument']
+    aperture = config['configuration']['instrument']['aperture']
     scene_sources, reference_sources = [], []
     for source in config['scene']:
         scene_sources.append(Source(config=source))
