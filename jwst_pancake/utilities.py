@@ -29,5 +29,5 @@ def determine_pandeia_offset(config):
         path = os.path.join(os.environ['pandeia_refdata'], tel, ins, 'psfs')
     library = PSFLibrary(path=path)
     scene_offsets = library.associate_offset_to_source(scene_sources, instrument, aperture)
-    scene_offsets = library.associate_offset_to_source(scene_sources, instrument, aperture)
+    reference_offsets = library.associate_offset_to_source(reference_sources, instrument, aperture)
     return {'scene': scene_offsets, 'reference': reference_offsets}
