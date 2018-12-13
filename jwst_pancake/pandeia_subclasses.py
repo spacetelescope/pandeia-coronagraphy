@@ -149,6 +149,10 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
         psf_result = CoronagraphyPSFLibrary.calc_psf(ins, wave, source_offset, oversample, pix_scl, 
                                                      fov_pixels, trim_fov_pixels=trim_fov_pixels)
 
+        optsys = ins._getOpticalSystem()
+        ote_pupil = optsys[0].aplitude
+        coron_pupil = optsys[-2].amplitude
+        pupil_throughput = coron_pupil.sum() / ote_pupil.sum()
         pix_scl = psf_result[0].header['PIXELSCL']
         upsamp = psf_result[0].header['OVERSAMP']
         diff_limit = psf_result[0].header['DIFFLMT']
@@ -164,7 +168,8 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
             'upsamp': upsamp,
             'instrument': instrument,
             'aperture_name': aperture_name,
-            'source_offset': source_offset
+            'source_offset': source_offset,
+            'pupil_throughput': pupil_throughput
         }
 
         return psf
@@ -179,7 +184,7 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
             psf_name = 'cached_{:.5f}_{}_{}_{:.3f}_{:.3f}_{}.fits'.format(wave, instrument, aperture_name, source_offset[0], source_offset[1], oversample)
             if self._have_psf(psf_name):
                 self._log("info", " Found in cache")
-                psf_flux, pix_scl, diff_limit = self._get_psf(psf_name)
+                psf_flux, pix_scl, diff_limit, pupil_throughput = self._get_psf(psf_name)
                 psf = {
                     'int': psf_flux,
                     'wave': wave,
@@ -188,7 +193,8 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
                     'upsamp': oversample,
                     'instrument': instrument,
                     'aperture_name': aperture_name,
-                    'source_offset': source_offset
+                    'source_offset': source_offset,
+                    'pupil_throughput': pupil_throughput
                 }
                 return psf
         elif cache == 'ram':
@@ -244,6 +250,10 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
     
         psf_result = self.calc_psf(ins, wave, source_offset, oversample, pix_scl, fov_pixels, trim_fov_pixels=trim_fov_pixels)
 
+        optsys = ins._getOpticalSystem()
+        ote_pupil = optsys[0].aplitude
+        coron_pupil = optsys[-2].amplitude
+        pupil_throughput = coron_pupil.sum() / ote_pupil.sum()
         pix_scl = psf_result[0].header['PIXELSCL']
         upsamp = psf_result[0].header['OVERSAMP']
         diff_limit = psf_result[0].header['DIFFLMT']
@@ -259,10 +269,12 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
             'upsamp': upsamp,
             'instrument': instrument,
             'aperture_name': aperture_name,
-            'source_offset': source_offset
+            'source_offset': source_offset,
+            'pupil_throughput': pupil_throughput
         }
         
         if cache == 'disk':
+            psf_result[0].header['PUPTHR'] = pupil_throughput
             psf_result.writeto(os.path.join(self._cache_path, psf_name))
             self._log("info", " Created and saved to cache.")
 
@@ -291,8 +303,9 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
         with fits.open(os.path.join(self._cache_path, psf_name)) as inf:
             pix_scl = inf[0].header['PIXELSCL']
             diff_limit = inf[0].header['DIFFLMT']
+            pupil_throughput = inf[0].header['PUPTHR']
             psf = inf[0].data
-        return psf, pix_scl, diff_limit
+        return psf, pix_scl, diff_limit, pupil_throughput
 
     @staticmethod
     def parse_aperture(aperture_name):
