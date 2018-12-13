@@ -433,12 +433,12 @@ class CoronagraphyConvolvedSceneCube(pandeia.engine.astro_spectrum.ConvolvedScen
         logging_fn(message)
 
 
-class CoronagraphyDetectorSignal(CoronagraphyConvolvedSceneCube):
+class CoronagraphyDetectorSignal(CoronagraphyConvolvedSceneCube, DetectorSignal):
     '''
     Override the DetectorSignal to avoid odd issues with inheritance. Unfortunately this currently
     means copying the functions entirely (with changes to which class is used)
     '''
-    def __init__(self, observation, calc_config=CalculationConfig(), webapp=False, order=None):
+    def __init__(self, observation, calc_config=CalculationConfig(), webapp=False, order=None, empty_scene=False):
         # Get calculation configuration
         self.calculation_config = calc_config
 
@@ -449,6 +449,8 @@ class CoronagraphyDetectorSignal(CoronagraphyConvolvedSceneCube):
         self.current_instrument = observation.instrument
         # and configure it for the order we wish to use, if applicable
         self.current_instrument.order = order
+        # save to the DetectorSignal instance, for convenience purposes
+        self.order = order
 
         # how are we projecting the signal onto the detector plane?
         self.projection_type = self.current_instrument.projection_type
@@ -474,8 +476,9 @@ class CoronagraphyDetectorSignal(CoronagraphyConvolvedSceneCube):
             self.observation.scene,
             self.current_instrument,
             background=self.background,
-            psf_library=self.current_instrument.psf_library,
-            webapp=webapp
+            psf_library=CoronagraphyPSFLibrary(),
+            webapp=webapp,
+            empty_scene=empty_scene
         )
 
         self.warnings.update(self.background.warnings)
@@ -487,6 +490,7 @@ class CoronagraphyDetectorSignal(CoronagraphyConvolvedSceneCube):
         self.rate_list = []
         self.rate_plus_bg_list = []
         self.saturation_list = []
+        self.groups_list = []
         self.pixgrid_list = []
 
         # Loop over all slices and calculate the photon and electron rates through the
@@ -501,6 +505,8 @@ class CoronagraphyDetectorSignal(CoronagraphyConvolvedSceneCube):
 
             # Saturation map for the slice
             slice_saturation = self.get_saturation_mask(rate=slice_rate_plus_bg['fp_pix'])
+            slice_group = self.current_instrument.exposure_spec.get_groups_before_sat(slice_rate_plus_bg['fp_pix'],
+                                                                                      self.det_pars['fullwell'])
 
             # The grid in the slice
             slice_pixgrid = self.get_pix_grid(slice_rate)
@@ -509,6 +515,7 @@ class CoronagraphyDetectorSignal(CoronagraphyConvolvedSceneCube):
             self.rate_list.append(slice_rate)
             self.rate_plus_bg_list.append(slice_rate_plus_bg)
             self.saturation_list.append(slice_saturation)
+            self.groups_list.append(slice_group)
             self.pixgrid_list.append(slice_pixgrid)
 
         # Get the mapping of wavelength to pixels on the detector plane. This is grabbed from the
@@ -531,574 +538,18 @@ class CoronagraphyDetectorSignal(CoronagraphyConvolvedSceneCube):
         # Reassemble rates of multiple slices on the detector
         self.rate = self.on_detector(self.rate_list)
         self.rate_plus_bg = self.on_detector(self.rate_plus_bg_list)
-
+        self.ngroup_map = self.current_instrument.exposure_spec.get_groups_before_sat(self.rate_plus_bg,
+                                                                                      self.det_pars['fullwell'])
+        self.fraction_saturation = np.max(
+            self.current_instrument.exposure_spec.get_saturation_fraction(self.rate_plus_bg,
+                                                                          self.det_pars['fullwell']))
         self.detector_pixels = self.current_instrument.get_detector_pixels(self.wave_pix)
 
         # Get the read noise correlation matrix and store it as an attribute.
         if self.det_pars['rn_correlation']:
-            self.read_noise_correlation_matrix = self.current_instrument.get_readnoise_correlation_matrix(self.rate.shape)
+            self.read_noise_correlation_matrix = self.current_instrument.get_readnoise_correlation_matrix(
+                self.rate.shape)
 
-    def spectral_detector_transform(self):
-        """
-        Create engine API format dict section containing properties of wavelength coordinates
-        at the detector plane.
-
-        Returns
-        -------
-        t: dict (engine API compliant keys)
-        """
-        t = {}
-        t['wave_det_refpix'] = 0
-        t['wave_det_max'] = self.wave_pix.max()
-        t['wave_det_min'] = self.wave_pix.min()
-
-        # there are currently three projection_type's which are basically detector plane types:
-        #
-        # 'spec' - where the detector plane is purely dispersion vs. spatial
-        # 'slitless' - basically a special case of 'spec' with where dispersion and spatial are mixed
-        # 'image' - where the detector plane is purely spatial vs. spatial (i.e. no disperser element)
-        #
-        # 'IFU' mode is of projection_type='spec' because the mapping from detector X pixels to
-        # wavelength is the same for each slice.  this projection_type will work for 'MSA' mode as well
-        # because we will only handle one aperture at a time.  'slitless' spectroscopy will mix
-        # spatial and dispersion information onto the detector X axis.  however, the detector
-        # plane is fundamentally spatial vs. wavelength in that case so it's handled the same as
-        # projection_type='spec'. creating a spectrum for a specific target will be handled via the
-        # extraction strategy.
-        if self.projection_type in ('spec', 'slitless', 'multiorder'):
-            t['wave_det_size'] = len(self.wave_pix)
-            if len(self.wave_pix) > 1:
-                # we don't yet have a way of handling non-linear coordinate transforms here. that said,
-                # this is mostly right for most of our cases with nirspec prism being the notable exception.
-                # this is also only used for plotting purposes while the true actual wave_pix mapping is used
-                # internally for all calculations.
-                t['wave_det_step'] = (self.wave_pix[-1] - self.wave_pix[0]) / t['wave_det_size']
-            else:
-                t['wave_det_step'] = 0.0
-            t['wave_det_refval'] = self.wave_pix[0]
-        elif self.projection_type == "image":
-            t['wave_det_step'] = 0.0
-            t['wave_det_refval'] = self.wave_pix[0]
-            t['wave_det_size'] = 1
-        else:
-            message = "Unsupported projection_type: %s" % self.projection_type
-            raise EngineOutputError(value=message)
-        return t
-
-    def wcs_info(self):
-        """
-        Get detector coordinate transform as a dict of WCS keyword/value pairs.
-
-        Returns
-        -------
-        header: dict
-            WCS header keys defining coordinate transform in the detector plane
-        """
-        if self.projection_type == 'image':
-            # if we're in imaging mode, the detector sampling is the same as the model
-            header = self.grid.wcs_info()
-        elif self.projection_type in ('spec', 'slitless', 'multiorder'):
-            # if we're in a dispersed mode, dispersion can be either along the X or Y axis. the image outputs in
-            # the engine Report are rotated so that dispersion will always appear to be along the X axis with
-            # wavelength increasing with increasing X (i. e. dispersion angle of 0).  currently, the only other
-            # supported dispersion angle is 90 which is what we get when dispersion_axis == 'y'.
-            t = self.grid.as_dict()
-            t.update(self.spectral_detector_transform())
-            header = {
-                'ctype1': 'Wavelength',
-                'crpix1': 1,
-                'crval1': t['wave_det_min'] - 0.5 * t['wave_det_step'],
-                'cdelt1': t['wave_det_step'],
-                'cunit1': 'um',
-                'cname1': 'Wavelength',
-                'ctype2': 'Y offset',
-                'crpix2': 1,
-                'crval2': t['y_min'] - 0.5 * t['y_step'],
-                'cdelt2': -t['y_step'],
-                'cunit2': 'arcsec',
-                'cname2': 'Detector Offset',
-            }
-            if self.dispersion_axis == 'y':
-                header['ctype2'] = 'X offset'
-                header['crval2'] = t['x_min'] - 0.5 * t['x_step'],
-                header['cdelt2'] = t['x_step']
-        else:
-            message = "Unsupported projection_type: %s" % self.projection_type
-            raise EngineOutputError(value=message)
-        return header
-
-    def get_wave_pix(self):
-        """
-        Return the mapping of wavelengths to pixels on the detector plane
-        """
-        return self.rate_list[0]['wave_pix']
-
-    def get_fp_rate(self):
-        """
-        Return scene flux at the focal plane in e-/s/pixel/micron (excludes background)
-        """
-        return self.rate_list[0]['fp']
-
-    def get_bg_fp_rate(self):
-        """
-        Calculate background in e-/s/pixel/micron at the focal plane
-        """
-        bg_fp_rate = self.focal_plane_rate(self.ote_rate(self.background.mjy_pix))
-        return bg_fp_rate
-
-    def get_bg_pix_rate(self):
-        """
-        Calculate the background on the detector in e-/s/pixel
-        """
-        bg_pix_rate = self.rate_plus_bg_list[0]['fp_pix'] - self.rate_list[0]['fp_pix']
-        return bg_pix_rate
-
-    def on_detector(self, rate_list):
-        """
-        This will take the list of (pixel) rates and use them create a single detector frame. A single
-        image will only have one rate in the list, but the IFUs will have n_slices. There may be other examples,
-        such as different spectral orders for NIRISS. It is not yet clear how many different flavors there are, so
-        this step may get refactored if it gets too complicated. Observing modes that only have one set of rates
-        (imaging and single-slit spectroscopy, for instance) will still go through this, but the operation is trivial.
-        """
-        aperture_sh = rate_list[0]['fp_pix'].shape
-        n_apertures = len(rate_list)
-        detector_shape = (aperture_sh[0] * n_apertures, aperture_sh[1])
-        detector = np.zeros(detector_shape)
-
-        i = 0
-        for rate in rate_list:
-            detector[i * aperture_sh[0]:(i + 1) * aperture_sh[0], :] = rate['fp_pix']
-            i += 1
-
-        return detector
-
-    def get_pix_grid(self, rate):
-        """
-        Generate the coordinate grid of the detector plane
-        """
-        if self.projection_type == 'image':
-            grid = self.grid
-        elif self.projection_type in ('spec', 'slitless', 'multiorder'):
-            nw = rate['wave_pix'].shape[0]
-            if self.dispersion_axis == 'x':
-                # for slitless calculations, the dispersion axis is longer than the spectrum being dispersed
-                # because the whole field of view is being dispersed. 'excess' is the size of the FOV
-                # and half will be to the left of the blue end of the spectrum and half to the right of the red end.
-                # this is used to create the new spatial coordinate transform for the pixel image on the detector.
-                excess = rate['fp_pix'].shape[1] - nw
-                pix_grid = coords.IrregularGrid(
-                    self.grid.col,
-                    (np.arange(nw + excess) - (nw + excess) / 2.0) * self.grid.xsamp
-                )
-            else:
-                excess = rate['fp_pix'].shape[0] - nw
-                pix_grid = coords.IrregularGrid(
-                    (np.arange(nw + excess) - (nw + excess) / 2.0) * self.grid.ysamp,
-                    self.grid.row
-                )
-            return pix_grid
-        else:
-            raise EngineOutputError(value="Unsupported projection_type: %s" % self.projection_type)
-        return grid
-
-    def all_rates(self, flux, add_extended_background=False):
-        """
-        Calculate rates in e-/s/pixel/micron or e-/s/pixel given a flux cube in mJy
-
-        Parameters
-        ----------
-        flux: ConvolvedSceneCube instance
-            Convolved source flux cube with flux units in mJy
-        add_extended_background: bool (default=False)
-            Toggle for including extended background not contained within the flux cube
-
-        Returns
-        -------
-        products: dict
-            Dict of products produced by rate calculation.
-                'wave_pix' - Mapping of wavelength to detector pixels
-                'ote' - Source rate at the telescope aperture
-                'fp' - Source rate at the focal plane in e-/s/pixel/micron
-                'fp_pix' - Source rate per pixel
-                'fp_pix_no_ipc' - Source rate per pixel excluding effects if inter-pixel capacitance
-        """
-        # The source rate at the telescope aperture
-        ote_rate = self.ote_rate(flux)
-
-        # The source rate at the focal plane in interacting photons/s/pixel/micron
-        fp_rate = self.focal_plane_rate(ote_rate)
-
-        # the fp_pix_variance is the variance of the per-pixel electron rate and includes the chromatic effects
-        # of quantum yield.
-        if self.projection_type == 'image':
-            # The wavelength-integrated rate in e-/s/pixel, relevant for imagers
-            fp_pix_rate, fp_pix_variance = self.image_rate(fp_rate)
-            wave_pix = self.wave_eff(fp_rate)
-
-        elif self.projection_type == 'spec':
-            # The wavelength-integrated rate in e-/s/pixel, relevant for spectroscopy
-            wave_pix, fp_pix_rate, fp_pix_variance = self.spec_rate(fp_rate)
-
-        elif self.projection_type in ('slitless', 'multiorder'):
-            # The wavelength-integrated rate in e-/s/pixel, relevant for slitless spectroscopy
-            wave_pix, fp_pix_rate, fp_pix_variance = self.slitless_rate(
-                fp_rate,
-                add_extended_background=add_extended_background
-            )
-
-        else:
-            raise EngineOutputError(value="Unsupported projection_type: %s" % self.projection_type)
-
-        # Include IPC effects, if available and requested
-        if self.det_pars['ipc'] and self.calculation_config.effects['ipc']:
-            kernel = self.current_instrument.get_ipc_kernel()
-            fp_pix_rate_ipc = self.ipc_convolve(fp_pix_rate, kernel)
-        else:
-            fp_pix_rate_ipc = fp_pix_rate
-
-        # fp_pix is the final product. Since there is no reason to
-        # carry around the ipc label everywhere, we rename it here.
-        products = {
-            'wave_pix': wave_pix,
-            'ote': ote_rate,
-            'fp': fp_rate,
-            'fp_pix': fp_pix_rate_ipc,
-            'fp_pix_no_ipc': fp_pix_rate,  # this is for calculating saturation
-            'fp_pix_variance': fp_pix_variance  # this is for calculating the detector noise
-        }
-        return products
-
-    def ote_rate(self, flux):
-        """
-        Calculate source rate in e-/s/pixel/micron at the telescope entrance aperture given
-        a flux cube in mJy/pixel.
-        """
-        # spectrum in mJy/pixel, wave in micron, f_lambda in photons/cm^2/s/micron
-        f_lambda = 1.5091905 * (flux / self.wave)
-        ote_int = self.current_instrument.telescope.get_ote_eff(self.wave)
-        coll_area = self.current_instrument.telescope.coll_area
-        a_lambda = coll_area * ote_int
-        # e-/s/pixel/micron
-        ote_rate = f_lambda * a_lambda
-        return ote_rate
-
-    def focal_plane_rate(self, rate):
-        """
-        Takes the output from self.ote_rate() and multiplies it by the components
-        of efficiency within the system and returns the source rate at the focal plane in
-        e-/s/pixel/micron.
-        """
-        filter_eff = self.current_instrument.get_filter_eff(self.wave)
-        disperser_eff = self.current_instrument.get_disperser_eff(self.wave)
-        internal_eff = self.current_instrument.get_internal_eff(self.wave)
-        qe = self.current_instrument.get_detector_qe(self.wave)
-
-        fp_rate = rate * filter_eff * disperser_eff * internal_eff * qe
-        return fp_rate
-
-    def spec_rate(self, rate):
-        '''
-        For slitted spectrographs, calculate the detector signal by integrating
-        along the dispersion direction of the cube (which is masked by a, by assumption,
-        narrow slit). For slitless systems or slits wider than the PSF, the slitless_rate
-        method should be used to preserve spatial information within the slit.
-
-        Parameters
-        ---------
-        rate: numpy.ndarray
-            Rate of photons interacting with detector as a function of model wavelength set
-
-        Returns
-        -------
-        products: 3-element tuple of numpy.ndarrays
-            first element - map of pixel to wavelength
-            second element - electron rate per pixel
-            third element - variance of electron rate per pixel
-        '''
-        dispersion = self.current_instrument.get_dispersion(self.wave)
-        wave_pix = self.current_instrument.get_wave_pix()
-        wave_pix_trunc = wave_pix[np.where(np.logical_and(wave_pix >= self.wave.min(),
-                                                          wave_pix <= self.wave.max()))]
-
-        # Check that the source spectrum is actually inside the instrumental wavelength
-        # coverage.
-        if len(wave_pix_trunc) == 0:
-            raise RangeError(value='wave and wave_pix do not overlap')
-
-        # Check the dispersion axis to determine which axis to sum and interpolate over
-        if self.dispersion_axis == 'x':
-            axis = 1
-        else:
-            axis = 0
-
-        # We can simply sum over the dispersion direction. This is where we lose the spatial information within the aperture.
-        spec_rate = np.sum(rate, axis=axis)
-
-        # And then scale to the dispersion function (pixel/micron) to transform
-        # from e-/s/micron to e-/s/pixel.
-        spec_rate_pix = spec_rate * dispersion
-
-        # but we are still sampled on the internal grid, so we have to interpolate to the pixel grid.
-        # use kind='slinear' since it's ~2x more memory efficient than 'linear'. 'slinear' uses different code path to
-        # calculate the slopes.
-        int_spec_rate = sci_int.interp1d(self.wave, spec_rate_pix, axis=axis, kind='slinear', assume_sorted=True, copy=False)
-        spec_rate_pix_sampled = int_spec_rate(wave_pix_trunc)
-
-        # Handle a detector gap here by constructing a mask. If the current_instrument implements it,
-        # it'll be a real mask array.  Otherwise it will simply be 1.0.
-        self.det_mask = self.current_instrument.create_gap_mask(wave_pix_trunc)
-
-        # this is the interacting photon rate in the detector with mask applied.
-        spec_rate_pix_sampled *= self.det_mask
-
-        # Add effects of non-unity quantum yields. For the spec projection, we assume that the quantum yield does not
-        # change over a spectral element. Then we can just multiply the products by the relevant factors.
-        q_yield, fano_factor = self.current_instrument.get_quantum_yield(wave_pix_trunc)
-
-        # convert the photon rate to electron rate by multiplying by the quantum yield which is a function of wavelength
-        spec_electron_rate_pix = spec_rate_pix_sampled * q_yield
-
-        # to meet IDT expectations, some instruments require a possibly chromatic fudge factor to be applied
-        # to the per-pixel electron rate variance.
-        var_fudge = self.current_instrument.get_variance_fudge(wave_pix_trunc)
-
-        # the variance in the electron rate, Ve, is also scaled by the quantum yield plus a fano factor which is
-        # analytic in the simple 1 or 2 electron case: Ve = (qy + fano) * Re.  since Re is the photon rate
-        # scaled by the quantum yield, Re = qy * Rp, we get: Ve = qy * (qy + fano) * Rp
-        spec_electron_variance_pix = spec_rate_pix_sampled * q_yield * (q_yield + fano_factor) * var_fudge
-        products = wave_pix_trunc, spec_electron_rate_pix, spec_electron_variance_pix
-
-        return products
-
-    def image_rate(self, rate):
-        '''
-        Calculate the electron rate for imaging modes by integrating along
-        the wavelength direction of the cube.
-
-        Parameters
-        ---------
-        rate: numpy.ndarray
-            Rate of photons interacting with detector as a function of model wavelength set
-
-        Returns
-        -------
-        products: 2-element tuple of numpy.ndarrays
-            first element - electron rate per pixel
-            second element - variance of electron rate per pixel
-        '''
-        q_yield, fano_factor = self.current_instrument.get_quantum_yield(self.wave)
-
-        # convert the photon rate to electron rate by multiplying by the quantum yield which is a function of wavelength
-        electron_rate_pix = integrate.simps(rate * q_yield, self.wave)
-
-        # to meet IDT expectations, some instruments require a possibly chromatic fudge factor to be applied
-        # to the per-pixel electron rate variance.
-        var_fudge = self.current_instrument.get_variance_fudge(self.wave)
-
-        # the variance in the electron rate, Ve, is also scaled by the quantum yield plus a fano factor which is
-        # analytic in the simple 1 or 2 electron case: Ve = (qy + fano) * Re.  since Re is the photon rate
-        # scaled by the quantum yield, Re = qy * Rp, we get: Ve = qy * (qy + fano) * Rp
-        electron_variance_pix = integrate.simps(rate * q_yield * (q_yield + fano_factor) * var_fudge, self.wave)
-
-        products = electron_rate_pix, electron_variance_pix
-
-        return products
-
-    def slitless_rate(self, rate, add_extended_background=True):
-        '''
-        Calculate the detector rates for slitless modes. Here we retain all spatial information and build
-        up the detector plane by shifting and coadding the frames from the convolved flux cube. Also need to handle
-        and add background that comes from outside the flux cube, but needs to be accounted for.
-
-        Parameters
-        ----------
-        rate: 3D numpy.ndarray
-            Cube containing the flux rate at the focal plane
-        add_extended_background: bool (default: True)
-            Toggle for including extended background not contained within the flux cube
-
-        Returns
-        -------
-        products: 2 entry tuple
-            wave_pix: 1D numpy.ndarray containing wavelength to pixel mapping on the detector plane
-            spec_rate: 2D numpy.ndarray of detector count rates
-        '''
-        wave_pix = self.current_instrument.get_wave_pix()
-        wave_subs = np.where(
-            np.logical_and(
-                wave_pix >= self.wave.min(),
-                wave_pix <= self.wave.max()
-            )
-        )
-        wave_pix_trunc = wave_pix[wave_subs]
-
-        if len(wave_pix_trunc) == 0:
-            raise RangeError(value='wave and wave_pix do not overlap')
-
-        dispersion = self.current_instrument.get_dispersion(wave_pix_trunc)
-        trace = self.current_instrument.get_trace(wave_pix_trunc)
-
-        q_yield, fano_factor = self.current_instrument.get_quantum_yield(wave_pix_trunc)
-        # if we kind='slinear' since it's ~2x more memory efficient than 'linear'. 'slinear' uses different code
-        # path to calculate the slopes. However, slinear is *much* slower, so it is a tradeoff. Also lowering the
-        # rate type to float32 to conserve memory.
-        int_rate_pix = sci_int.interp1d(self.wave, rate.astype(np.float32,casting='same_kind'), 
-                                        kind='linear', axis=2, assume_sorted=True, copy=False)
-        rate_pix = int_rate_pix(wave_pix_trunc)
-
-        # convert the photon rate to electron rate by multiplying by the quantum yield which is a function of wavelength
-        electron_rate_pix = rate_pix * q_yield
-
-        # to meet IDT expectations, some instruments require a possibly chromatic fudge factor to be applied
-        # to the per-pixel electron rate variance.
-        var_fudge = self.current_instrument.get_variance_fudge(wave_pix_trunc)
-
-        # the variance in the electron rate, Ve, is also scaled by the quantum yield plus a fano factor which is
-        # analytic in the simple 1 or 2 electron case: Ve = (qy + fano) * Re.  since Re is the photon rate
-        # scaled by the quantum yield, Re = qy * Rp, we get: Ve = qy * (qy + fano) * Rp
-        electron_variance_pix = rate_pix * q_yield * (q_yield + fano_factor) * var_fudge
-
-        # interpolate the background onto the pixel spacing
-        int_bg_fp_rate = sci_int.interp1d(self.wave, self.bg_fp_rate.astype(np.float32,casting='same_kind'), 
-                                          kind='linear', assume_sorted=True, copy=False)
-        bg_fp_rate_pix = int_bg_fp_rate(wave_pix_trunc)
-
-        # calculate electron rate and variance due to background
-        bg_electron_rate = bg_fp_rate_pix * q_yield
-        bg_electron_variance = bg_fp_rate_pix * q_yield * (q_yield + fano_factor) * var_fudge
-
-        # dispersion_axis tells us whether we need to sum the planes of the cube horizontally
-        # or vertically on the detector plane.
-        if self.dispersion_axis == 'x':
-            spec_shape = (rate_pix.shape[0], rate_pix.shape[2] + rate_pix.shape[1])
-            spec_rate = np.zeros(spec_shape)
-            spec_variance = np.zeros(spec_shape)
-            for i in np.arange(dispersion.shape[0]):
-                # Background not yet completely added. Make sure there is a trace shift to be done so that we
-                # don't make an expensive call to shift() if we don't have to. Use mode='nearest' to fill in new
-                # pixels with background when image is shifted.
-                if trace[i] != 0.0:
-                    spec_rate[:, i:i + rate_pix.shape[1]] += shift(
-                        electron_rate_pix[:, :, i],
-                        shift=(trace[i], 0),
-                        mode='nearest',
-                        order=1
-                    ) * dispersion[i]
-                    spec_variance[:, i:i + rate_pix.shape[1]] += shift(
-                        electron_variance_pix[:, :, i],
-                        shift=(trace[i], 0),
-                        mode='nearest',
-                        order=1
-                    ) * dispersion[i]
-                else:
-                    spec_rate[:, i:i + rate_pix.shape[1]] += electron_rate_pix[:, :, i] * dispersion[i]
-                    spec_variance[:, i:i + rate_pix.shape[1]] += electron_variance_pix[:, :, i] * dispersion[i]
-
-                # Adding background to all other pixels, unless we are asked not to.
-                if add_extended_background:
-                    spec_rate[:, :i] += bg_electron_rate[i] * dispersion[i]
-                    spec_rate[:, i + rate_pix.shape[1]:] += bg_electron_rate[i] * dispersion[i]
-                    spec_variance[:, :i] += bg_electron_variance[i] * dispersion[i]
-                    spec_variance[:, i + rate_pix.shape[1]:] += bg_electron_variance[i] * dispersion[i]
-        else:
-            spec_shape = (rate_pix.shape[2] + rate_pix.shape[0], rate_pix.shape[1])
-            spec_rate = np.zeros(spec_shape)
-            spec_variance = np.zeros(spec_shape)
-            for i in np.arange(dispersion.shape[0]):
-                # Background not yet completely added. Make sure there is a trace shift to be done so that we
-                # don't make an expensive call to shift() if we don't have to. Use mode='nearest' to fill in new
-                # pixels with background when image is shifted.
-                if trace[i] != 0.0:
-                    spec_rate[i:i + rate_pix.shape[1], :] += shift(
-                        electron_rate_pix[:, :, i],
-                        shift=(0, trace[i]),
-                        mode='nearest'
-                    ) * dispersion[i]
-                    spec_variance[i:i + rate_pix.shape[1], :] += shift(
-                        electron_variance_pix[:, :, i],
-                        shift=(0, trace[i]),
-                        mode='nearest'
-                    ) * dispersion[i]
-                else:
-                    spec_rate[i:i + rate_pix.shape[1], :] += electron_rate_pix[:, :, i] * dispersion[i]
-                    spec_variance[i:i + rate_pix.shape[1], :] += electron_rate_pix[:, :, i] * dispersion[i]
-                # Adding background to all other pixels, unless we are asked not to.
-                if add_extended_background:
-                    spec_rate[:i, :] += bg_electron_rate[i] * dispersion[i]
-                    spec_rate[i + rate_pix.shape[1]:, :] += bg_electron_rate[i] * dispersion[i]
-                    spec_variance[:i, :] += bg_electron_variance[i] * dispersion[i]
-                    spec_variance[i + rate_pix.shape[1]:, :] += bg_electron_variance[i] * dispersion[i]
-
-        # dispersion_axis determines whether wavelength is the first or second axis
-        if self.dispersion_axis == 'x' or self.projection_type == 'multiorder':
-            products = wave_pix_trunc, spec_rate, spec_variance
-        else:
-            # if dispersion is along Y, wavelength increases bottom to top, but Y index increases top to bottom.
-            # flip the Y axis to account for this.
-            products = wave_pix_trunc, np.flipud(spec_rate), np.flipud(spec_variance)
-
-        return products
-
-    def wave_eff(self, rate):
-        rate_tot = np.nansum(rate, axis=0)
-        a = np.sum(rate_tot * self.wave)
-        b = np.sum(rate_tot)
-        if b > 0.0:
-            wave_eff = a / b
-        else:
-            wave_eff = self.wave.mean()
-        wave_eff_arr = np.array([wave_eff])
-        return wave_eff_arr
-
-    def get_projection_type(self):
-        return self.projection_type
-
-    def ipc_convolve(self, rate, kernel):
-        fp_pix_ipc = convolve_fft(rate, kernel, normalize_kernel=False,
-                                  boundary='wrap',
-                                  fftn=pyfftw.interfaces.numpy_fft.fftn,
-                                  ifftn=pyfftw.interfaces.numpy_fft.ifftn)
-
-        debug_utils.debugarrays.store('etc3D', 'ipc_convolve',
-                                      {
-                                        'rate': rate,
-                                        'kernel': kernel,
-                                        'fp_pix_ipc': fp_pix_ipc,
-                                        'description': 'This is just a short, unncessary description.'
-                                      })
-
-        return fp_pix_ipc
-
-    def get_saturation_mask(self, rate=None):
-        """
-        Compute a numpy array indicating pixels with full saturation (2), partial saturation (1) and no saturation (0).
-
-        Parameters
-        ----------
-        rate: None or 2D np.ndarray
-            Detector plane rate image used to build saturation map from
-
-        Returns
-        -------
-        mask: 2D np.ndarray
-            Saturation mask image
-        """
-        if rate is None:
-            rate = self.rate_plus_bg
-
-        saturation_mask = np.zeros(rate.shape)
-
-        if self.calculation_config.effects['saturation']:
-            fullwell = self.det_pars['fullwell']
-            exp_pars = self.current_instrument.exposure_spec
-            unsat_ngroups = exp_pars.get_unsaturated_groups(rate, fullwell)
-            ngroup = exp_pars.ngroup
-
-            saturation_mask[(unsat_ngroups < ngroup)] = 1
-            saturation_mask[(unsat_ngroups < 2)] = 2
-
-        return saturation_mask
 
 class SeparateTargetReferenceCoronagraphy(Coronagraphy):
     '''
