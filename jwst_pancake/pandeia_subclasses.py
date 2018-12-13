@@ -401,13 +401,15 @@ class CoronagraphyConvolvedSceneCube(pandeia.engine.astro_spectrum.ConvolvedScen
     This class overrides the ConvolvedSceneCube class, and instead of using SPECTRAL_MAX_SAMPLES it
     looks for a wavelength size that should be present in the 'scene' part of the template
     '''
-    def __init__(self, scene, instrument, background=None, psf_library=None, webapp=False):
+    def __init__(self, scene, instrument, background=None, psf_library=None, webapp=False, empty_scene=False):
         from .engine import options
         self.coronagraphy_options = options
         self._options = options
         self._log("debug", "CORONAGRAPHY SCENE CUBE ACTIVATE!")
         pandeia.engine.astro_spectrum.SPECTRAL_MAX_SAMPLES = self._max_samples
-        super(CoronagraphyConvolvedSceneCube, self).__init__(scene, instrument, background, CoronagraphyPSFLibrary(), webapp)
+        super(CoronagraphyConvolvedSceneCube, self).__init__(scene, instrument, background, 
+                                                             CoronagraphyPSFLibrary(), webapp,
+                                                             empty_scene)
 
     @property
     def _max_samples(self):
