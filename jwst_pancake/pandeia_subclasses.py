@@ -149,10 +149,7 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
         psf_result = CoronagraphyPSFLibrary.calc_psf(ins, wave, source_offset, oversample, pix_scl, 
                                                      fov_pixels, trim_fov_pixels=trim_fov_pixels)
 
-        optsys = ins._getOpticalSystem()
-        ote_pupil = optsys[0].aplitude
-        coron_pupil = optsys[-2].amplitude
-        pupil_throughput = coron_pupil.sum() / ote_pupil.sum()
+        pupil_throughput = self._pupil_throughput(ins)
         pix_scl = psf_result[0].header['PIXELSCL']
         upsamp = psf_result[0].header['OVERSAMP']
         diff_limit = psf_result[0].header['DIFFLMT']
@@ -250,10 +247,7 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
     
         psf_result = self.calc_psf(ins, wave, source_offset, oversample, pix_scl, fov_pixels, trim_fov_pixels=trim_fov_pixels)
 
-        optsys = ins._getOpticalSystem()
-        ote_pupil = optsys[0].aplitude
-        coron_pupil = optsys[-2].amplitude
-        pupil_throughput = coron_pupil.sum() / ote_pupil.sum()
+        pupil_throughput = self._pupil_throughput(ins)
         pix_scl = psf_result[0].header['PIXELSCL']
         upsamp = psf_result[0].header['OVERSAMP']
         diff_limit = psf_result[0].header['DIFFLMT']
@@ -306,6 +300,16 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
             pupil_throughput = inf[0].header['PUPTHR']
             psf = inf[0].data
         return psf, pix_scl, diff_limit, pupil_throughput
+    
+    def _pupil_throughput(self, ins):
+        """
+        Determines pupil throughput given a webbpsf instrument object
+        """
+        optsys = ins._getOpticalSystem()
+        ote_pupil = optsys[0].amplitude
+        coron_pupil = optsys[-2].amplitude
+        pupil_throughput = coron_pupil.sum() / ote_pupil.sum()
+        return pupil_throughput
 
     @staticmethod
     def parse_aperture(aperture_name):
