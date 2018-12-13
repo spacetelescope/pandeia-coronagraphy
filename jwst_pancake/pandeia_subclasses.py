@@ -149,7 +149,7 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
         psf_result = CoronagraphyPSFLibrary.calc_psf(ins, wave, source_offset, oversample, pix_scl, 
                                                      fov_pixels, trim_fov_pixels=trim_fov_pixels)
 
-        pupil_throughput = self._pupil_throughput(ins)
+        pupil_throughput = CoronagraphyPSFLibrary._pupil_throughput(ins)
         pix_scl = psf_result[0].header['PIXELSCL']
         upsamp = psf_result[0].header['OVERSAMP']
         diff_limit = psf_result[0].header['DIFFLMT']
@@ -301,7 +301,8 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
             psf = inf[0].data
         return psf, pix_scl, diff_limit, pupil_throughput
     
-    def _pupil_throughput(self, ins):
+    @staticmethod
+    def _pupil_throughput(ins):
         """
         Determines pupil throughput given a webbpsf instrument object
         """
