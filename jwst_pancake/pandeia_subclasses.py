@@ -92,59 +92,24 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
 
         return psf_associations
     
+    def get_pupil_throughput(self, wave, instrument, aperture_name):
+        """
+        Intended for pandeia 1.2 compatibility.
+        """
+        if hasattr(super(CoronagraphyPSFLibrary, self), "get_pupil_throughput"):
+            return super(CoronagraphyPSFLibrary, self).get_pupil_throughput(wave, instrument, aperture_name)
+        ins = CoronagraphyPSFLibrary._get_instrument(instrument, aperture_name)
+        return CoronagraphyPSFLibrary._pupil_throughput(ins)
+    
     @staticmethod
     @lru_cache(maxsize=cache_maxsize)
     def get_cached_psf( wave, instrument, aperture_name, oversample=None, source_offset=(0, 0), otf_options=None, full_aperture=None):
         from .engine import options
         #Make the instrument and determine the mode
-        if instrument.upper() == 'NIRCAM':
-            ins = webbpsf.NIRCam()
-        
-            # WebbPSF needs to know the filter to select the optimal 
-            # offset for the bar masks. The filter is not passed into
-            # get_psf but is stored in the full aperture name in self._psfs
-            if aperture_name in ['masklwb', 'maskswb']:
-                # Everything after the aperture name is the filter name.
-                full_aperture = self._psfs[0]['aperture_name']
-                fname = full_aperture[full_aperture.find(aperture_name) + len(aperture_name):]
-                ins.filter = fname
-            else:
-                ins.filter = options.current_config['configuration']['instrument']['filter']
-            if wave > 2.5:
-                # need to toggle to LW detector.
-                ins.detector='A5'
-                ins.pixelscale = ins._pixelscale_long
-        elif instrument.upper() == 'MIRI':
-            ins = webbpsf.MIRI()
-            ins.filter = options.current_config['configuration']['instrument']['filter']
-        else:
-            raise ValueError('Only NIRCam and MIRI are supported instruments!')
-        image_mask, pupil_mask, fov_pixels, trim_fov_pixels, pix_scl, mode = CoronagraphyPSFLibrary.parse_aperture(aperture_name)
-        if sys.version_info[0] < 3:
-            image_mask = "{}".format(image_mask)
-            pupil_mask = "{}".format(pupil_mask)
-        ins.image_mask = image_mask
-        ins.pupil_mask = pupil_mask
-
-        # Apply any extra options if specified by the user:
-        from .engine import options
-        for key in options.on_the_fly_webbpsf_options:
-            if sys.version_info[0] < 3:
-                ins.options[key] = "{}".format(options.on_the_fly_webbpsf_options[key])
-            else:
-                ins.options[key] = options.on_the_fly_webbpsf_options[key]
-
-        if options.on_the_fly_webbpsf_opd is not None:
-            if sys.version_info[0] < 3:
-                ins.pupilopd = "{}".format(options.on_the_fly_webbpsf_opd)
-            else:
-                ins.pupilopd = options.on_the_fly_webbpsf_opd
-
-        #get offset
-        ins.options['source_offset_r'] = source_offset[0]
-        ins.options['source_offset_theta'] = source_offset[1]
-        ins.options['output_mode'] = 'oversampled'
-        ins.options['parity'] = 'odd'
+        ins = CoronagraphyPSFLibrary._get_instrument(instrument, aperture_name, source_offset)
+        pix_scl = ins.pixelscale
+        fov_pixels = CoronagraphyPSFLibrary.fov_pixels[aperture_name]
+        trim_fov_pixels = CoronagraphyPSFLibrary.trim_fov_pixels[aperture_name]
         
         psf_result = CoronagraphyPSFLibrary.calc_psf(ins, wave, source_offset, oversample, pix_scl, 
                                                      fov_pixels, trim_fov_pixels=trim_fov_pixels)
@@ -209,41 +174,10 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
 
         # Either disk cache miss or no caching
         #Make the instrument and determine the mode
-        if instrument.upper() == 'NIRCAM':
-            ins = webbpsf.NIRCam()
-        
-            # WebbPSF needs to know the filter to select the optimal
-            # offset for the bar masks. The filter is not passed into
-            # get_psf but is stored in the full aperture name in self._psfs
-            if aperture_name in ['masklwb', 'maskswb']:
-                # Everything after the aperture name is the filter name.
-                full_aperture = self._psfs[0]['aperture_name']
-                fname = full_aperture[full_aperture.find(aperture_name) + len(aperture_name):]
-                ins.filter = fname
-            if wave > 2.5:
-                # need to toggle to LW detector.
-                ins.detector='A5'
-                ins.pixelscale = ins._pixelscale_long
-        elif instrument.upper() == 'MIRI':
-            ins = webbpsf.MIRI()
-        else:
-            raise ValueError('Only NIRCam and MIRI are supported instruments!')
-        image_mask, pupil_mask, fov_pixels, trim_fov_pixels, pix_scl = self.parse_aperture(aperture_name)
-        ins.image_mask = image_mask
-        ins.pupil_mask = pupil_mask
-
-        # Apply any extra options if specified by the user:
-        for key in self._options.on_the_fly_webbpsf_options:
-            ins.options[key] = self._options.on_the_fly_webbpsf_options[key]
-
-        if self._options.on_the_fly_webbpsf_opd is not None:
-            ins.pupilopd = self._options.on_the_fly_webbpsf_opd
-
-        #get offset
-        ins.options['source_offset_r'] = source_offset[0]
-        ins.options['source_offset_theta'] = source_offset[1]
-        ins.options['output_mode'] = 'oversampled'
-        ins.options['parity'] = 'odd'
+        ins = CoronagraphyPSFLibrary._get_instrument(instrument, aperture_name, source_offset)
+        pix_scl = ins.pixelscale
+        fov_pixels = CoronagraphyPSFLibrary.fov_pixels[aperture_name]
+        trim_fov_pixels = CoronagraphyPSFLibrary.trim_fov_pixels[aperture_name]
     
         psf_result = self.calc_psf(ins, wave, source_offset, oversample, pix_scl, fov_pixels, trim_fov_pixels=trim_fov_pixels)
 
@@ -311,7 +245,43 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
         coron_pupil = optsys[-2].amplitude
         pupil_throughput = coron_pupil.sum() / ote_pupil.sum()
         return pupil_throughput
-
+    
+    @staticmethod
+    def _get_instrument(instrument, aperture_name, source_offset=None):
+        from .engine import options as pancake_options
+        instrument_config = pancake_options.current_config['configuration']['instrument']
+        scene_config = pancake_options.current_config['scene']
+        ref_config = pancake_options.current_config['strategy']['psf_subtraction_source']
+        if source_offset is None:
+            offset_x = max([x['position']['x_offset'] for x in scene_config] + [ref_config['position']['x_offset']])
+            offset_y = max([x['position']['y_offset'] for x in scene_config] + [ref_config['position']['y_offset']])
+            source_offset_radius = np.sqrt(offset_x**2. + offset_y**2.)
+            source_offset_azimuth = 360*(np.pi+np.arctan2(offset_x, offset_y))/2/np.pi
+            source_offset = [source_offset_radius, source_offset_azimuth]
+        if instrument.upper() == 'NIRCAM':
+            ins = webbpsf.NIRCam()
+            ins.filter = instrument_config['filter']
+            if CoronagraphyPSFLibrary.nircam_mode[aperture_name] == 'lw_imaging':
+                ins.detector = 'A5'
+                ins.pixelscale = ins._pixelscale_long
+        elif instrument.upper() == 'MIRI':
+            ins = webbpsf.MIRI()
+            ins.filter = instrument_config['filter']
+        else:
+            raise ValueError('Only NIRCam and MIRI are supported instruments!')
+        ins.image_mask = CoronagraphyPSFLibrary.image_mask[aperture_name]
+        ins.pupil_mask = CoronagraphyPSFLibrary.pupil_mask[aperture_name]
+        for key in pancake_options.on_the_fly_webbpsf_options:
+            ins.options[key] = pancake_options.on_the_fly_webbpsf_options[key]
+        if pancake_options.on_the_fly_webbpsf_opd is not None:
+            ins.pupilopd = pancake_options.on_the_fly_webbpsf_opd
+        #get offset
+        ins.options['source_offset_r'] = source_offset[0]
+        ins.options['source_offset_theta'] = source_offset[1]
+        ins.options['output_mode'] = 'oversampled'
+        ins.options['parity'] = 'odd'
+        return ins
+    
     @staticmethod
     def parse_aperture(aperture_name):
         '''
@@ -394,22 +364,54 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
             print("Message is: {}".format(message))
         logging_fn = getattr(logger, level.lower())
         logging_fn(message)
+    
+    nircam_mode = {
+                    'mask210r': 'sw_imaging', 'mask335r': 'lw_imaging', 'mask430r': 'lw_imaging',
+                    'masklwb': 'lw_imaging', 'maskswb': 'sw_imaging', 'fqpm1065': 'imaging',
+                    'fqpm1140': 'imaging', 'fqpm1550': 'imaging', 'lyot2300': 'imaging'
+                  }
+
+    image_mask = {
+                    'mask210r': 'MASK210R', 'mask335r': 'MASK335R', 'mask430r': 'MASK430R',
+                    'masklwb': 'MASKLWB', 'maskswb': 'MASKSWB', 'fqpm1065': 'FQPM1065',
+                    'fqpm1140': 'FQPM1140', 'fqpm1550': 'FQPM1550', 'lyot2300': 'LYOT2300'
+                 }
+    
+    pupil_mask = {
+                    'mask210r': 'CIRCLYOT', 'mask335r': 'CIRCLYOT', 'mask430r': 'CIRCLYOT', 
+                    'masklwb': 'WEDGELYOT', 'maskswb': 'WEDGELYOT', 'fqpm1065': 'MASKFQPM', 
+                    'fqpm1140': 'MASKFQPM', 'fqpm1550': 'MASKFQPM', 'lyot2300': 'MASKLYOT'
+                 }
+    
+    fov_pixels = {
+                    'mask210r': 101, 'mask335r': 101, 'mask430r': 101, 'masklwb': 351, 
+                    'maskswb': 351, 'fqpm1065': 81, 'fqpm1140': 81, 'fqpm1550': 81, 
+                    'lyot2300': 81
+                 }
+    
+    trim_fov_pixels = {
+                        'mask210r': None, 'mask335r': None, 'mask430r': None, 'masklwb': 101, 
+                        'maskswb': 101, 'fqpm1065': None, 'fqpm1140': None, 'fqpm1550': None, 
+                        'lyot2300': None
+                      }
 
 
 class CoronagraphyConvolvedSceneCube(pandeia.engine.astro_spectrum.ConvolvedSceneCube):
     '''
     This class overrides the ConvolvedSceneCube class, and instead of using SPECTRAL_MAX_SAMPLES it
     looks for a wavelength size that should be present in the 'scene' part of the template
+    
+    background=None, psf_library=None, webapp=False, empty_scene=False
     '''
-    def __init__(self, scene, instrument, background=None, psf_library=None, webapp=False, empty_scene=False):
+    def __init__(self, scene, instrument, **kwargs):
         from .engine import options
         self.coronagraphy_options = options
         self._options = options
         self._log("debug", "CORONAGRAPHY SCENE CUBE ACTIVATE!")
         pandeia.engine.astro_spectrum.SPECTRAL_MAX_SAMPLES = self._max_samples
-        super(CoronagraphyConvolvedSceneCube, self).__init__(scene, instrument, background, 
-                                                             CoronagraphyPSFLibrary(), webapp,
-                                                             empty_scene)
+        if 'psf_library' in kwargs and not isinstance(kwargs['psf_library'], CoronagraphyPSFLibrary):
+            kwargs['psf_library'] = CoronagraphyPSFLibrary()
+        super(CoronagraphyConvolvedSceneCube, self).__init__(scene, instrument, **kwargs)
 
     @property
     def _max_samples(self):
@@ -439,8 +441,10 @@ class CoronagraphyDetectorSignal(CoronagraphyConvolvedSceneCube):
     '''
     Override the DetectorSignal to avoid odd issues with inheritance. Unfortunately this currently
     means copying the functions entirely (with changes to which class is used)
+    
+    webapp=False, order=None, empty_scene=False
     '''
-    def __init__(self, observation, calc_config=CalculationConfig(), webapp=False, order=None, empty_scene=False):
+    def __init__(self, observation, calc_config=CalculationConfig(), **kwargs):
         # Get calculation configuration
         self.calculation_config = calc_config
 
@@ -449,10 +453,20 @@ class CoronagraphyDetectorSignal(CoronagraphyConvolvedSceneCube):
 
         # Load the instrument we're using
         self.current_instrument = observation.instrument
-        # and configure it for the order we wish to use, if applicable
-        self.current_instrument.order = order
-        # save to the DetectorSignal instance, for convenience purposes
-        self.order = order
+        # save order to the DetectorSignal instance, for convenience purposes
+        self.order = None
+        if 'order' in kwargs:
+            self.order = kwargs['order']
+            del kwargs['order']
+        # and configure the instrument for that order
+        self.current_instrument.order = self.order
+        
+        # Get optional arguments
+        webapp = kwargs.get('webapp', False)
+        empty_scene = kwargs.get('empty_scene', False)
+        
+        # Add coronagraphy-specific PSF library for on-the-fly PSF generation
+        kwargs['psf_library'] = CoronagraphyPSFLibrary()
 
         # how are we projecting the signal onto the detector plane?
         self.projection_type = self.current_instrument.projection_type
@@ -471,18 +485,17 @@ class CoronagraphyDetectorSignal(CoronagraphyConvolvedSceneCube):
             self.background = bg.Background(self.observation, webapp=webapp)
         else:
             self.background = None
+        
+        kwargs['background'] = self.background
 
         # Then initialize the flux and wavelength grid
         CoronagraphyConvolvedSceneCube.__init__(
             self,
             self.observation.scene,
             self.current_instrument,
-            background=self.background,
-            psf_library=CoronagraphyPSFLibrary(),
-            webapp=webapp,
-            empty_scene=empty_scene
+            **kwargs
         )
-
+        
         self.warnings.update(self.background.warnings)
         # We have to propagate the background through the system transmission
         # to get the background in e-/s/pixel/micron. The background rate is a 1D spectrum.
@@ -507,8 +520,12 @@ class CoronagraphyDetectorSignal(CoronagraphyConvolvedSceneCube):
 
             # Saturation map for the slice
             slice_saturation = self.get_saturation_mask(rate=slice_rate_plus_bg['fp_pix'])
-            slice_group = self.current_instrument.exposure_spec.get_groups_before_sat(slice_rate_plus_bg['fp_pix'],
-                                                                                      self.det_pars['fullwell'])
+            exposure_spec = self.current_instrument.exposure_spec
+            if hasattr(exposure_spec, 'get_groups_before_sat'):
+                slice_group = exposure_spec.get_groups_before_sat(slice_rate_plus_bg['fp_pix'],
+                                                                  self.det_pars['fullwell'])
+            else:
+                slice_group = self._groups_before_sat(slice_rate_plus_bg['fp_pix'], self.det_pars['fullwell'])
 
             # The grid in the slice
             slice_pixgrid = self.get_pix_grid(slice_rate)
@@ -540,18 +557,26 @@ class CoronagraphyDetectorSignal(CoronagraphyConvolvedSceneCube):
         # Reassemble rates of multiple slices on the detector
         self.rate = self.on_detector(self.rate_list)
         self.rate_plus_bg = self.on_detector(self.rate_plus_bg_list)
-        self.ngroup_map = self.current_instrument.exposure_spec.get_groups_before_sat(self.rate_plus_bg,
-                                                                                      self.det_pars['fullwell'])
-        self.fraction_saturation = np.max(
-            self.current_instrument.exposure_spec.get_saturation_fraction(self.rate_plus_bg,
-                                                                          self.det_pars['fullwell']))
+
+        exposure_spec = self.current_instrument.exposure_spec
+        if hasattr(exposure_spec, 'get_groups_before_sat'):
+            self.ngroup_map = exposure_spec.get_groups_before_sat(slice_rate_plus_bg['fp_pix'],
+                                                                  self.det_pars['fullwell'])
+        else:
+            self.ngroup_map = self._groups_before_sat(slice_rate_plus_bg['fp_pix'], self.det_pars['fullwell'])
+
+        if hasattr(exposure_spec, 'get_saturation_fraction'):
+            saturation_fraction = exposure_spec.get_saturation_fraction(self.rate_plus_bg, self.det_pars['fullwell'])
+        else:
+            saturation_fraction = exposure_spec.saturation_time / (self.det_pars['fullwell'] / self.rate_plus_bg)
+        self.fraction_saturation = np.max(saturation_fraction)
+        
         self.detector_pixels = self.current_instrument.get_detector_pixels(self.wave_pix)
 
         # Get the read noise correlation matrix and store it as an attribute.
         if self.det_pars['rn_correlation']:
-            self.read_noise_correlation_matrix = self.current_instrument.get_readnoise_correlation_matrix(
-                self.rate.shape)
-
+            self.read_noise_correlation_matrix = self.current_instrument.get_readnoise_correlation_matrix(self.rate.shape)
+    
     def spectral_detector_transform(self):
         """
         Create engine API format dict section containing properties of wavelength coordinates
@@ -1142,6 +1167,26 @@ class CoronagraphyDetectorSignal(CoronagraphyConvolvedSceneCube):
             saturation_mask[(unsat_ngroups < 2)] = 2
 
         return saturation_mask
+
+    def _groups_before_sat(self, slope, fullwell):
+        """
+        Fix for Pandeia 1.2/1.3, since exposure spec doesn't have this in 1.2
+        """
+        exposure_spec = self.current_instrument.exposure_spec
+        tfffr = exposure_spec.tfffr
+        nframe = exposure_spec.nframe
+        tframe = exposure_spec.tframe
+        nskip = exposure_spec.nskip
+        time_to_saturation = self.det_pars['fullwell'] / slope.clip(1e-10, np.max(slope))
+        if exposure_spec.det_type == 'sias':
+            groups_before_sat = (time_to_saturation - tfffr) / (nframe * tframe)
+        elif exposure_spec.det_type == 'h2rg':
+            groups_before_sat = (((time_to_saturation - tfffr) / tframe) - nframe) / (nframe + nskip + 1.)
+        else:
+            raise ValueError("Unknown detector type {}".format(exposure_spec.det_type))
+        slice_group = np.floor(groups_before_sat)
+        return slice_group
+
 
 
 class SeparateTargetReferenceCoronagraphy(Coronagraphy):
