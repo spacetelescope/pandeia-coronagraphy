@@ -103,6 +103,24 @@ def calculate_batch(calcfiles,nprocesses=None):
 
     return results
 
+def calculate_target(raw_config):
+    """
+    Run a pandeia coronagraphy calculation in target-only mode
+    """
+    config = deepcopy(raw_config)
+    config['strategy']['psf_subtraction'] = 'target_only'
+    return perform_calculation(config)
+
+def calculate_reference(raw_config):
+    """
+    Run a pandeia coronagraphy calculation in target-only mode, replacing the target scene with
+    the scene stored in the coronagraphy strategy PSF subtraction source.
+    """
+    config = deepcopy(raw_config)
+    config['strategy']['psf_subtraction'] = 'target_only'
+    config['scene'] = [config['strategy']['psf_subtraction_source']]
+    return perform_calculation(config)
+
 def perform_calculation(calcfile):
     '''
     Manually decorate pandeia.engine.perform_calculation to circumvent
