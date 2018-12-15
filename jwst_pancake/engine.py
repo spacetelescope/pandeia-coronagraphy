@@ -118,7 +118,7 @@ def calculate_reference(raw_config):
     """
     config = deepcopy(raw_config)
     config['strategy']['psf_subtraction'] = 'target_only'
-    config['scene'] = [config['strategy']['psf_subtraction_source']]
+    config['scene'] = [deepcopy(config['strategy']['psf_subtraction_source'])]
     return perform_calculation(config)
 
 def perform_calculation(calcfile):
