@@ -13,8 +13,6 @@ import warnings
 import astropy.units as units
 import astropy.io.fits as fits
 from poppy import poppy_core
-from scipy.ndimage import convolve
-from skimage import draw
 
 if sys.version_info > (3, 2):
     from functools import lru_cache
@@ -103,6 +101,29 @@ def calculate_batch(calcfiles,nprocesses=None):
 
     return results
 
+def calculate_all(raw_config):
+    """
+    Run a pandeia coronagraphy calculation. Output will be:
+        - a pandeia report showing the target
+        - a pandeia report showing the reference source
+        - a pandeia report showing the unocculted target (with saturation disabled)
+    In pandeia 1.3, this can be done as a single calculation, with the results obtained from
+    sub-reports. In pandeia 1.2, the sub-reports are not actually returned properly, so the overall
+    calculation needs to be run 3 times.
+    """
+    output = {'target': {}, 'reference': {}, 'contrast': {}}
+    pandeia_version = pkg_resources.get_distribution('pandeia.engine').version
+    if pandeia_version >= "1.3":
+        result = perform_calculation(deepcopy(raw_config))
+        output['target'] = result['sub_reports'][0]
+        output['reference'] = result['sub_reports'][1]
+        output['contrast'] = result['sub_reports'][2]
+    else:
+        output['target'] = calculate_target(raw_config)
+        output['reference'] = calculate_reference(raw_config)
+        output['contrast'] = calculate_contrast(raw_config)
+    return output
+
 def calculate_target(raw_config):
     """
     Run a pandeia coronagraphy calculation in target-only mode
@@ -120,6 +141,22 @@ def calculate_reference(raw_config):
     config['strategy']['psf_subtraction'] = 'target_only'
     config['scene'] = [deepcopy(config['strategy']['psf_subtraction_source'])]
     return perform_calculation(config)
+
+def calculate_contrast(raw_config):
+    """
+    Run a pandeia coronagraphy calculation in target-only mode, with the target offset to be
+    unocculted, and with saturation disabled.
+    """
+    from .scene import offset_scene
+
+    config = deepcopy(raw_config)
+    config['strategy']['psf_subtraction'] = 'target_only'
+    saturation_value = options.effects['saturation']
+    options.set_saturation(False)
+    offset_scene(config['scene'], 0.5, 0.5) #arsec
+    contrast_result = perform_calculation(config)
+    options.set_saturation(saturation_value)
+    return contrast_result
 
 def perform_calculation(calcfile):
     '''
@@ -265,34 +302,27 @@ def calculate_subtracted(raw_config, target=None, reference=None, ta_error=False
     from .analysis import klip_projection, register_to_target
     
     config = process_config(raw_config, target, reference)
-    config['strategy']['psf_subtraction'] = 'target_only'
 
-    target = deepcopy(config)
-
-    reference = deepcopy(config)
-    reference['scene'] = [deepcopy(config['strategy']['psf_subtraction_source'])]
-    
     if ta_error:
         # add a unique TA error for the target
         errx, erry = get_ta_error()
-        offset_scene(target['scene'], errx, erry)
-
-        # add a unique TA error for the reference
-        errx_ref, erry_ref = get_ta_error()
-        offset_scene(reference['scene'], errx_ref, erry_ref)
+        offset_scene(config['scene'], errx, erry)
     
     if sgd:
-        sgds = create_SGD(reference, stepsize=stepsize)
+        sgds = create_SGD(ta_error, stepsize=stepsize)
     else:
-        sgds = create_SGD(reference, stepsize=stepsize, pattern_name="SINGLE-POINT")
+        sgds = create_SGD(ta_error, stepsize=stepsize, pattern_name="SINGLE-POINT")
+    
+    first_config = deepcopy(config)
+    offset_scene([first_config['strategy']['psf_subtraction_source']], *sgds[0])
 
-    sgd_results = []
-    for sgd in sgds:
-        sgd_results.append(perform_calculation(sgd))
-
-    targ_results = perform_calculation(target)
-
-    target_slope = targ_results['2d']['detector']
+    first_result = calculate_all(config)
+    target_slope = first_result['target']['2d']['detector']
+    sgd_results = [first_result['reference']]
+    for sgd in sgds[1:]:
+        sgd_config = deepcopy(config)
+        offset_scene([sgd_config['strategy']['psf_subtraction_source']], *sgd)
+        sgd_results.append(calculate_reference(sgd_config))
 
     sgd_reg = []
     sgd_slopes = []
@@ -318,7 +348,7 @@ def calculate_subtracted(raw_config, target=None, reference=None, ta_error=False
 
     return output
 
-def calculate_contrast(raw_config, target=None, reference=None, ta_error=True, iterations=2):
+def calculate_contrast_curve(raw_config, target=None, reference=None, ta_error=True, iterations=5, keep_options=False):
     """
     This is a replacement for the Pandeia calculate_contrast function. It is designed to use the
     various internal analysis functions to do the following:
@@ -368,6 +398,8 @@ def calculate_contrast(raw_config, target=None, reference=None, ta_error=True, i
         contrast: normalized contrast profile
     """
     from .scene import get_ta_error, offset_scene
+    from skimage import draw
+    from scipy.ndimage import convolve
     
     capitalized_instruments = {
                                 "miri": 'MIRI',
@@ -377,64 +409,94 @@ def calculate_contrast(raw_config, target=None, reference=None, ta_error=True, i
     }
 
     config = process_config(raw_config, target, reference)
-    config['strategy']['psf_subtraction'] = 'target_only'
 
-    target = deepcopy(config)
-
-    reference = deepcopy(config)
-    reference['scene'] = [deepcopy(config['strategy']['psf_subtraction_source'])]
-    
+    # Save existing options    
+    saved_options = options.current_options
+    if not keep_options:
+        options.on_the_fly_PSFs = True
+        options.wave_sampling = 6
     target_slopes = []
     reference_slopes = []
+    offaxis_slopes = []
+    print("Starting Iteration")
     for n in range(iterations):
         if options.verbose:
             print("Iteration {} of {}".format(n+1, iterations))
-        current_target = deepcopy(target)
-        current_reference = deepcopy(reference)
+        current_config = deepcopy(config)
         if ta_error:
             # Add unique target acq error to the target
-            offset_scene(current_target['scene'], *get_ta_error() )
+            offset_scene(current_config['scene'], *get_ta_error() )
             # Add unique target acq error to the reference
-            offset_scene(current_reference['scene'], *get_ta_error() )
+            offset_scene([current_config['strategy']['psf_subtraction_source']], *get_ta_error())
         # Adopt a new realization of the WFE.
         # Note that we're using the same WFE for target and reference here.
-        ins = config['configuration']['instrument']['instrument'].lower()
-        ote_name = 'OPD_RevW_ote_for_{}_predicted.fits.gz'.format(capitalized_instruments[ins])
-        options.on_the_fly_webbpsf_opd = (ote_name, n)
+#         if not keep_options:
+#             ins = config['configuration']['instrument']['instrument'].lower()
+#             ote_name = 'OPD_RevW_ote_for_{}_predicted.fits.gz'.format(capitalized_instruments[ins])
+#             options.on_the_fly_webbpsf_opd = (ote_name, n)
         # Calculate target and reference
-        targcalc = perform_calculation(current_target)
-        target_slopes.append(targcalc['2d']['detector'])
-        refcalc = perform_calculation(current_reference)
-        reference_slopes.append(refcalc['2d']['detector'])
+        results = calculate_all(current_config)
+        target_slopes.append(results['target']['2d']['detector'])
+        reference_slopes.append(results['reference']['2d']['detector'])
+        offaxis_slopes.append(results['contrast']['2d']['detector'])
+        print("Finished iteration {} of {}".format(n+1, iterations))
 
-    offaxis = deepcopy(target)
-    offaxis['calculation']['effects']['saturation'] = False # Disable saturation
+    print("Creating Unocculted Image")
+    offaxis = deepcopy(config)
     offset_scene(offaxis['scene'], 0.5, 0.5) #arsec
 
-    offaxis_slope = perform_calculation(offaxis)['2d']['detector']
+    options.set_saturation(False)
 
+    offaxis_result = calculate_target(offaxis)
+    offaxis_slope = offaxis_result['2d']['detector']
+
+    # Restore original option configuration
+    options.current_options = saved_options
+    
+    print("Creating Subtraction Stack")
     subtraction_stack = np.zeros((iterations,) + target_slopes[0].shape)
     for i, (targ, ref) in enumerate(zip(target_slopes, reference_slopes)):
         aligned_ref = analysis.register_to_target(ref, targ) # Aligned, scaled, mean-centered reference
         subtraction_stack[i] = targ - np.nanmean(targ) - aligned_ref # Mean-center target and subtract reference
 
+    print("Creating Covariance Matrix")
     cov_matrix = analysis.covariance_matrix(subtraction_stack)
 
+    print("Creating Aperture Image")
     image_dim = subtraction_stack[0].shape
     radius = 5
     aperture_image = np.zeros(image_dim)
     aperture_image[draw.circle((image_dim[0] - 1) // 2, (image_dim[1] - 1) // 2, radius)] = 1
-
-    bins, normalized_profile = analysis.compute_contrast(subtraction_stack, offaxis_slope, aperture_image)
     
+    print("Computing Aperture Matrix")
+    aperture_matrix = analysis.aperture_matrix(aperture_image)
+
+    print("Computing Noise Map")
+    noise_map = analysis.noise_map(cov_matrix, aperture_matrix, image_dim)
+    
+    print("Convolving off-axis image")
+    convolved_offaxis = convolve(offaxis_slope, aperture_image, mode='constant')
+    normalization = convolved_offaxis.max()
+    
+    print("Creating Radial Profile")
+    bins, profile = analysis.radial_profile(noise_map)
+    normalized_profile = profile / normalization
+
     output =    {
                     'targets': target_slopes,
                     'references': reference_slopes,
-                    'unocculted': offaxis_slope,
+                    'unocculted': offaxis_slopes[0],
                     'subtractions': subtraction_stack,
+                    'covariance_matrix': cov_matrix,
+                    'aperture_image': aperture_image,
+                    'aperture_matrix': aperture_matrix,
+                    'noise_map': noise_map,
+                    'convolved_unocculted': convolved_offaxis,
+                    'normalization': normalization,
                     'contrast': {
                                     'bins': bins,
-                                    'profile': normalized_profile
+                                    'profile': profile,
+                                    'normalized_profile': normalized_profile
                                 }
                 }
 

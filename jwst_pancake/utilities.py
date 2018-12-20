@@ -31,3 +31,22 @@ def determine_pandeia_offset(config):
     scene_offsets = library.associate_offset_to_source(scene_sources, instrument, aperture)
     reference_offsets = library.associate_offset_to_source(reference_sources, instrument, aperture)
     return {'scene': scene_offsets, 'reference': reference_offsets}
+
+def stellar_spectrum(stellar_type, bandpass, magnitude):
+    """
+    Create a spectrum dictionary that assumes a Phoenix model with a key found in pandeia, and set
+    the magnitude to the provided value in the provided bandpass (in ABMAG)
+    """
+    spectrum = {'spectrum_parameters': ['normalization', 'sed']}
+    spectrum['sed'] = {'sed_type': 'phoenix', 'key': stellar_type}
+    if 'bessel' in bandpass or 'johnson' in bandpass:
+        spectrum['normalization'] = {'type': 'photsys', 'bandpass': bandpass, 
+                                     'norm_flux': magnitude, 'norm_fluxunit': 'abmag'}
+    elif 'miri' in bandpass or 'nircam' in bandpass:
+        spectrum['normalization'] = {'type': 'jwst', 'bandpass': bandpass, 'norm_flux': magnitude,
+                                     'norm_fluxunit': 'abmag'}
+    else:
+        spectrum['normalization'] = {'type': 'photsys', 'bandpass': bandpass, 
+                                     'norm_flux': magnitude, 'norm_fluxunit': 'abmag'}
+    
+    return spectrum
