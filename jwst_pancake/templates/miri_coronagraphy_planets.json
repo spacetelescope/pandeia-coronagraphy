@@ -28,7 +28,7 @@
             "disperser": null,
             "filter": "f1065c",
             "instrument": "miri",
-            "mode": "coronagraphy"
+            "mode": "imaging"
         }
     },
   "scene": [
@@ -165,14 +165,13 @@
   ], 
   "background": "medium", 
   "strategy": {
-      "method": "coronagraphy",
+      "method": "imagingapphot",
       "aperture_size": 0.08,
       "sky_annulus": [0.1,0.2],
       "contrast_azimuth": 45.0,
       "annulus_shape": "circular",
       "background_subtraction": true,
-      "display_string": "Coronagraphy",
-      "calc_type": "contrast",
+      "display_string": "Custom Coronagraphy",
       "permitted_units": ["arcsec"],
       "units": "arcsec",
       "target_type": "",
@@ -180,10 +179,11 @@
       "target_xy": [0.0, 0.0],
       "scene_rotation": 0.0,
       "psf_subtraction": "optimal",
-      "psf_subtraction_xy": [100.0, 100.0],
+      "psf_subtraction_xy": [0.0, 0.0],
       "pointing_error": [0.0, 0.0],
       "delta_opd": 0.0,
       "ncontrast": 100,
+      "psf_subtraction": "target_only",
       "psf_subtraction_source": {
           "id": 99,
           "position": {
@@ -199,7 +199,7 @@
               "name": "generic source",
               "normalization": {
                   "bandpass": "bessel,h",
-                  "norm_flux": 1000.0,
+                  "norm_flux": 100000.0,
                   "norm_fluxunit": "abmag",
                   "type": "photsys"
               },

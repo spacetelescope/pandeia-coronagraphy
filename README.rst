@@ -8,15 +8,15 @@ Pandeia-Coronagraphy
 Installation
 ----
 
-It is highly recommended that you begin by installing `AstroConda <http://astroconda.readthedocs.io/en/latest/installation.html#install-astroconda>`_ (with Python 2.7) and then follow these installation `instructions <https://gist.github.com/nmearl/c2e0a06d2d5a3715baf7d9486780dc08>`_ to install the Pandeia engine and the required reference files. Once Pandeia is set up, the following command will install this package:
+It is highly recommended that you begin by installing `AstroConda <http://astroconda.readthedocs.io/en/latest/installation.html#install-astroconda>`_ (with Python 2.7 or python 3) and then follow these installation `instructions <https://jwst-docs.stsci.edu/display/JPP/JWST+ETC+Coding+Tutorial>`_ to install the Pandeia engine and the required reference files. Once Pandeia is set up, the following command will install this package:
 
- ``pip install git+git://github.com/kvangorkom/pandeia-coronagraphy.git``
+ ``pip install git+git://github.com/spacetelescope/pandeia-coronagraphy.git``
 
 _____
 
 Alternatively, follow these step-by-step instructions:
 
-1. If you don't already have Anaconda or Miniconda installed, download and install the Python 2.7 version `here <https://conda.io/miniconda.html>`_.
+1. If you don't already have Anaconda or Miniconda installed, download and install either the Python 2.7 version or the Python 3 version `here <https://conda.io/miniconda.html>`_.
 
 2. Add the AstroConda channel to your Conda channels: 
 
@@ -25,12 +25,16 @@ Alternatively, follow these step-by-step instructions:
 3. Create a conda environment with the STScI software stack:
 
  ``conda create -n astroconda stsci python=2.7``
+ 
+ or
+ 
+ ``conda create -n astroconda stsci python=3``
 
 4. Activate this environment with ``source activate astroconda``. (NB: Conda is only compatible with a BASH shell.)
 
 5. Install the Pandeia engine with this command: ``pip install pandeia.engine``. (You *should* already have the Pysynphot package installed at this point. If you don't, install it with ``pip install pysypnphot``. You can generate a list of installed packages with ``conda list``.)
 
-6. Download and unzip the `Pandeia 1.1.1 data files <http://ssb.stsci.edu/pandeia/engine/1.1.1/pandeia_data-1.1.1.tar.gz>`_ and the PySynphot data files (ftp://archive.stsci.edu/pub/hst/pysynphot/). See `Installing PySynphot Data Files`_ for more detail on setting up the PySynphot data files.
+6. Download and unzip the matching Pandeia data files from the `Pandeia pypi page <http://ssb.stsci.edu/pandeia/engine/>`_ and the PySynphot data files (ftp://archive.stsci.edu/pub/hst/pysynphot/). See `Installing PySynphot Data Files`_ for more detail on setting up the PySynphot data files.
 
 7. Add the following lines to your ~/.bashrc file (and ``source`` it after modifying):
 
@@ -41,9 +45,9 @@ Alternatively, follow these step-by-step instructions:
  
 8. Finally, install the pandeia-coronagraphy package:
 
- ``pip install git+git://github.com/kvangorkom/pandeia-coronagraphy.git``
+ ``pip install git+git://github.com/spacetelescope/pandeia-coronagraphy.git``
 
-9. (Optional) Install `WebbPSF <https://pythonhosted.org/webbpsf/index.html>`_ with ``conda install webbpsf``. This is required only if you are interested in using higher-fidelity PSFs in your calculations; otherwise, the Pandeia engine relies on interpolations of a bundled library of precomputed PSFs. This functionality is documented `here <https://github.com/kvangorkom/pandeia-coronagraphy/blob/master/notebooks/miri_photon_noise_and_contrast.ipynb>`_ and `here <https://github.com/kvangorkom/pandeia-coronagraphy/blob/master/notebooks/nircam_small_grid_dither.ipynb>`_.
+9. (Optional, but *highly* recommended) Install `WebbPSF <https://pythonhosted.org/webbpsf/index.html>`_ with ``conda install webbpsf``. This is required only if you are interested in using higher-fidelity PSFs in your calculations; otherwise, the Pandeia engine relies on interpolations of a bundled library of precomputed PSFs. This functionality is documented `here <https://github.com/spacetelescope/pandeia-coronagraphy/blob/master/notebooks/miri_photon_noise_and_contrast.ipynb>`_ and `here <https://github.com/spacetelescope/pandeia-coronagraphy/blob/master/notebooks/nircam_small_grid_dither.ipynb>`_.
 
 Installing PySynphot Data Files
 ----
@@ -58,6 +62,6 @@ Getting Started
 
 Once installation is complete, take a look at the provided `Jupyter notebooks <https://github.com/kvangorkom/pandeia-coronagraphy/tree/master/notebooks>`_ for examples of constructing a scene, setting instrument properties, running the Pandeia engine, and performing some basic post-processing.
 
-You can find a quickstart guide to using the Pandeia engine `here <https://github.com/spacetelescope/pandeia-tutorials>`_, which also includes a description of the engine `inputs <https://github.com/spacetelescope/pandeia-tutorials/blob/master/reference/engine_input.md>`_ and `outputs <https://github.com/spacetelescope/pandeia-tutorials/blob/master/reference/engine_output.md>`_.
+You can find a quickstart guide to using the Pandeia engine `here <https://jwst-docs.stsci.edu/display/JPP/JWST+ETC+Coding+Tutorial>`_.
 
-Example input templates for the Pandeia engine are provided for coronagraphy `here <https://github.com/kvangorkom/pandeia-coronagraphy/tree/master/pandeia_coronagraphy/templates>`_ and for other instruments and observing modes `here <https://github.com/spacetelescope/pandeia-tutorials/tree/master/configurations/jwst>`_.
+Example input templates for the Pandeia engine are provided for coronagraphy `here <https://github.com/spacetelescope/pandeia-coronagraphy/tree/master/pandeia_coronagraphy/templates>`_ and for other instruments and observing modes `here <https://github.com/spacetelescope/pandeia-tutorials/tree/master/configurations/jwst>`_.

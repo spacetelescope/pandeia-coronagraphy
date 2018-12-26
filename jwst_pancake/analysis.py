@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+
 from itertools import product
 
 import numpy as np
@@ -152,7 +154,9 @@ def aperture_matrix(aperture):
     # Embed the kernel in an oversized array
     dim = aperture.shape
     desired = (max(dim) * 2 + 1) / 2
-    add = ((desired - dim[0] // 2,desired - dim[0] // 2),(desired - dim[1] // 2,desired - dim[1] // 2))
+    add_x = int(np.floor((desired - dim[0] // 2)))
+    add_y = int(np.floor((desired - dim[1] // 2)))
+    add = ((add_x, add_x), (add_y, add_y))
     kernel = np.pad(aperture, add, mode = 'constant')
     
     # Loop over every (y, x) pixel shift and record the flattened aperture
