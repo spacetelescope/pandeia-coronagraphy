@@ -142,7 +142,7 @@ def calculate_reference(raw_config):
     config['scene'] = [deepcopy(config['strategy']['psf_subtraction_source'])]
     return perform_calculation(config)
 
-def calculate_contrast(raw_config):
+def calculate_contrast(raw_config, offset_x=0.5, offset_y=0.5):
     """
     Run a pandeia coronagraphy calculation in target-only mode, with the target offset to be
     unocculted, and with saturation disabled.
@@ -153,7 +153,7 @@ def calculate_contrast(raw_config):
     config['strategy']['psf_subtraction'] = 'target_only'
     saturation_value = options.effects['saturation']
     options.set_saturation(False)
-    offset_scene(config['scene'], 0.5, 0.5) #arsec
+    offset_scene(config['scene'], offset_x, offset_y)
     contrast_result = perform_calculation(config)
     options.set_saturation(saturation_value)
     return contrast_result

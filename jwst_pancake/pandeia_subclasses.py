@@ -137,9 +137,26 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
         return psf
 
     def get_psf(self, wave, instrument, aperture_name, oversample=None, source_offset=(0, 0), otf_options=None, full_aperture=None):
+
         cache = self._options.cache
         if oversample is None:
             oversample = self._options.on_the_fly_oversample
+
+        if source_offset[0] > 50.:
+            ins = CoronagraphyPSFLibrary._get_instrument(instrument, aperture_name, source_offset)
+            diff_limit = ((((wave*units.micron).to(units.meter).value)/6.5)*units.radian).to(units.arcsec).value
+            psf = {
+                'int': np.ones((1,1)),
+                'wave': wave,
+                'pix_scl': ins.pixelscale/oversample,
+                'diff_limit': diff_limit,
+                'upsamp': oversample,
+                'instrument': instrument,
+                'aperture_name': aperture_name,
+                'source_offset': source_offset,
+                'pupil_throughput': self._pupil_throughput(ins)
+            }
+            return psf
 
         self._log("info", "Getting {} {} {}... with caching {}".format(instrument, aperture_name, wave, cache))
         if cache == 'disk':
