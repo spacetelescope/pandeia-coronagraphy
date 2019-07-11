@@ -329,7 +329,8 @@ def calculate_subtracted(raw_config, target=None, reference=None, ta_error=False
     for r in sgd_results:
         slope = r['2d']['detector']
         sgd_slopes.append(slope)
-        reg = register_to_target(slope, target_slope, rescale_reference=True)
+        mask = np.where(np.isnan(slope), 1., 0.)
+        reg = register_to_target(slope, target_slope, mask=mask, rescale_reference=True)
         sgd_reg.append(reg)
 
     sgd_reg = np.array(sgd_reg)
