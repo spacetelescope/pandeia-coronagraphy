@@ -34,7 +34,13 @@ Alternatively, follow these step-by-step instructions:
 
 5. Install the Pandeia engine with this command: ``pip install pandeia.engine``. (You *should* already have the Pysynphot package installed at this point. If you don't, install it with ``pip install pysypnphot``. You can generate a list of installed packages with ``conda list``.)
 
-6. Download and unzip the matching Pandeia data files from the `Pandeia pypi page <http://ssb.stsci.edu/pandeia/engine/>`_ and the PySynphot data files (ftp://archive.stsci.edu/pub/hst/pysynphot/). See `Installing PySynphot Data Files`_ for more detail on setting up the PySynphot data files.
+6. Download and unzip the `Pandeia v1.4. reference data files <https://stsci.app.box.com/v/pandeia-refdata-v1p4>`_ and the `PySynphot data files <ftp://archive.stsci.edu/pub/hst/pysynphot/>`_ (ftp://archive.stsci.edu/pub/hst/pysynphot/). See `Installing PySynphot Data Files`_ for more detail on setting up the PySynphot data files.
+
+.. raw:: html
+ 
+	<dl><dt><strong>Warning!</strong></dt>
+	<dd>Backwards compatibility with Pandeia data files earlier than v1.3 is deprecated and was removed in v1.4.</dd>
+	</dl>
 
 7. Add the following lines to your ~/.bashrc file (and ``source`` it after modifying):
 
