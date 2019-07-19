@@ -8,7 +8,7 @@ Pandeia-Coronagraphy
 Installation
 ----
 
-It is highly recommended that you begin by installing `AstroConda <http://astroconda.readthedocs.io/en/latest/installation.html#install-astroconda>`_ (with Python 2.7 or python 3) and then follow these installation `instructions <https://jwst-docs.stsci.edu/display/JPP/JWST+ETC+Coding+Tutorial>`_ to install the Pandeia engine and the required reference files. Once Pandeia is set up, the following command will install this package:
+It is highly recommended that you begin by installing `AstroConda <http://astroconda.readthedocs.io/en/latest/installation.html#install-astroconda>`_ (with Python 2.7 or python 3) and then follow these installation `instructions <https://jwst-docs.stsci.edu/jwst-exposure-time-calculator-overview/jwst-etc-pandeia-engine-tutorial/installing-pandeia>`_ to install the Pandeia engine and the required reference files. Once Pandeia is set up, the following command will install this package:
 
  ``pip install git+git://github.com/spacetelescope/pandeia-coronagraphy.git``
 
@@ -60,8 +60,8 @@ The entire PySynphot data file collection is quite large, and the PySynphot pack
 Getting Started
 ----
 
-Once installation is complete, take a look at the provided `Jupyter notebooks <https://github.com/kvangorkom/pandeia-coronagraphy/tree/master/notebooks>`_ for examples of constructing a scene, setting instrument properties, running the Pandeia engine, and performing some basic post-processing.
+Once installation is complete, take a look at the provided `Jupyter notebooks <https://github.com/spacetelescope/pandeia-coronagraphy/tree/master/notebooks>`_ for examples of constructing a scene, setting instrument properties, running the Pandeia engine, and performing some basic post-processing.
 
-You can find a quickstart guide to using the Pandeia engine `here <https://jwst-docs.stsci.edu/display/JPP/JWST+ETC+Coding+Tutorial>`_.
+You can find a quickstart guide to using the Pandeia engine `here <https://jwst-docs.stsci.edu/jwst-exposure-time-calculator-overview/jwst-etc-pandeia-engine-tutorial/pandeia-quickstart>`_.
 
 Example input templates for the Pandeia engine are provided for coronagraphy `here <https://github.com/spacetelescope/pandeia-coronagraphy/tree/master/pandeia_coronagraphy/templates>`_ and for other instruments and observing modes `here <https://github.com/spacetelescope/pandeia-tutorials/tree/master/configurations/jwst>`_.
