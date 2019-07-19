@@ -36,7 +36,7 @@ Alternatively, follow these step-by-step instructions:
 
 6. Download and unzip the `Pandeia v1.4. reference data files <https://stsci.app.box.com/v/pandeia-refdata-v1p4>`_ and the `PySynphot data files <ftp://archive.stsci.edu/pub/hst/pysynphot/>`_ (ftp://archive.stsci.edu/pub/hst/pysynphot/). See `Installing PySynphot Data Files`_ for more detail on setting up the PySynphot data files.
 
-.. raw:: html
+ .. raw:: html
  
 	<dl><dt><strong>Warning!</strong></dt>
 	<dd>Backwards compatibility with Pandeia data files earlier than v1.3 is deprecated and was removed in v1.4.</dd>
