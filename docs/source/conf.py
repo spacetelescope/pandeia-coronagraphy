@@ -10,14 +10,15 @@
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #
-# import os
-# import sys
-# sys.path.insert(0, os.path.abspath('.'))
-
-import datetime
 import os
 import sys
+sys.path.insert(0, os.path.abspath('.'))
 import stsci_rtd_theme
+import sphinx
+
+def setup(app):
+    app.add_stylesheet("stsci.css")
+
 
 
 # -- Project information -----------------------------------------------------
@@ -38,6 +39,18 @@ release = '1.0'
 extensions = ['recommonmark'
               ]
 
+# the below is not strictly necessary but helps with extensions you may use across versions
+from distutils.version import LooseVersion
+
+on_rtd = os.environ.get('READTHEDOCS', None) == 'True'
+if on_rtd:
+    extensions.append('sphinx.ext.mathjax')
+elif LooseVersion(sphinx.__version__) < LooseVersion('1.4'):
+    extensions.append('sphinx.ext.pngmath')
+else:
+    extensions.append('sphinx.ext.imgmath')
+
+
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
 
@@ -52,7 +65,11 @@ exclude_patterns = []
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-html_theme = 'sphinx_rtd_theme'
+html_theme = 'stsci_rtd_theme'
+html_theme_path = [stsci_rtd_theme.get_html_theme_path()]
+
+html_favicon = 'pancake-logo.png'
+#html_logo = 'pancake-icon.png'
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
