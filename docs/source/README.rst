@@ -1,5 +1,5 @@
 
-.. image:: PanCAKE-header.pdf
+.. image:: PanCAKE-header.png
     :align: center
     :alt: jwst-pancake
 
