@@ -8,7 +8,7 @@ Pandeia-Coronagraphy
 Installation
 ----
 
-It is highly recommended that you begin by installing `AstroConda <http://astroconda.readthedocs.io/en/latest/installation.html#install-astroconda>`_ (with Python 2.7 or python 3) and then follow these installation `instructions <https://jwst-docs.stsci.edu/display/JPP/JWST+ETC+Coding+Tutorial>`_ to install the Pandeia engine and the required reference files. Once Pandeia is set up, the following command will install this package:
+It is highly recommended that you begin by installing `AstroConda <http://astroconda.readthedocs.io/en/latest/installation.html#install-astroconda>`_ (with Python 2.7 or python 3) and then follow these installation `instructions <https://jwst-docs.stsci.edu/jwst-exposure-time-calculator-overview/jwst-etc-pandeia-engine-tutorial/installing-pandeia>`_ to install the Pandeia engine and the required reference files. Once Pandeia is set up, the following command will install this package:
 
  ``pip install git+git://github.com/spacetelescope/pandeia-coronagraphy.git``
 
@@ -34,7 +34,13 @@ Alternatively, follow these step-by-step instructions:
 
 5. Install the Pandeia engine with this command: ``pip install pandeia.engine``. (You *should* already have the Pysynphot package installed at this point. If you don't, install it with ``pip install pysypnphot``. You can generate a list of installed packages with ``conda list``.)
 
-6. Download and unzip the matching Pandeia data files from the `Pandeia pypi page <http://ssb.stsci.edu/pandeia/engine/>`_ and the PySynphot data files (ftp://archive.stsci.edu/pub/hst/pysynphot/). See `Installing PySynphot Data Files`_ for more detail on setting up the PySynphot data files.
+6. Download and unzip the `Pandeia v1.4. reference data files <https://stsci.app.box.com/v/pandeia-refdata-v1p4>`_ and the `PySynphot data files <ftp://archive.stsci.edu/pub/hst/pysynphot/>`_ (ftp://archive.stsci.edu/pub/hst/pysynphot/). See `Installing PySynphot Data Files`_ for more detail on setting up the PySynphot data files.
+
+ .. raw:: html
+ 
+	<dl><dt><strong>Warning!</strong></dt>
+	<dd>Backwards compatibility with Pandeia data files earlier than v1.3 is deprecated and was removed in v1.4.</dd>
+	</dl>
 
 7. Add the following lines to your ~/.bashrc file (and ``source`` it after modifying):
 
@@ -60,8 +66,8 @@ The entire PySynphot data file collection is quite large, and the PySynphot pack
 Getting Started
 ----
 
-Once installation is complete, take a look at the provided `Jupyter notebooks <https://github.com/kvangorkom/pandeia-coronagraphy/tree/master/notebooks>`_ for examples of constructing a scene, setting instrument properties, running the Pandeia engine, and performing some basic post-processing.
+Once installation is complete, take a look at the provided `Jupyter notebooks <https://github.com/spacetelescope/pandeia-coronagraphy/tree/master/notebooks>`_ for examples of constructing a scene, setting instrument properties, running the Pandeia engine, and performing some basic post-processing.
 
-You can find a quickstart guide to using the Pandeia engine `here <https://jwst-docs.stsci.edu/display/JPP/JWST+ETC+Coding+Tutorial>`_.
+You can find a quickstart guide to using the Pandeia engine `here <https://jwst-docs.stsci.edu/jwst-exposure-time-calculator-overview/jwst-etc-pandeia-engine-tutorial/pandeia-quickstart>`_.
 
 Example input templates for the Pandeia engine are provided for coronagraphy `here <https://github.com/spacetelescope/pandeia-coronagraphy/tree/master/pandeia_coronagraphy/templates>`_ and for other instruments and observing modes `here <https://github.com/spacetelescope/pandeia-tutorials/tree/master/configurations/jwst>`_.
