@@ -1,4 +1,4 @@
-.. image:: jwst-pancake_logo_full.png
+.. image:: PanCAKE_logo.png
     :align: center
     :alt: jwst-pancake
 
