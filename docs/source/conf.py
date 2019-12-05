@@ -39,6 +39,9 @@ release = '1.0'
 extensions = ['recommonmark'
               ]
 
+master_doc = 'index'
+
+
 # the below is not strictly necessary but helps with extensions you may use across versions
 from distutils.version import LooseVersion
 
