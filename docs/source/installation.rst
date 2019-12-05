@@ -1,7 +1,3 @@
-.. image:: PanCAKE_logo.png
-    :align: center
-    :alt: jwst-pancake
-
 ---------------------------------------
 
 .. _install:
