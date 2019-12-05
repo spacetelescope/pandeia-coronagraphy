@@ -1,7 +1,3 @@
-.. image:: jwst-pancake_logo_full.png
-    :align: center
-    :alt: jwst-pancake
-
 ---------------------------------------
 
 .. _install:

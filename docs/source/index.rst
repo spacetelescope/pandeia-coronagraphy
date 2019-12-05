@@ -4,7 +4,7 @@
    contain the root `toctree` directive.
 
 
-.. image:: pancake-header.png
+.. image:: panCAKE-header.png
     :align: center
     :alt: jwst-pancake
 .. raw:: html
