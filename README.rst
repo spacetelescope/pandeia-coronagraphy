@@ -32,9 +32,9 @@ Alternatively, follow these step-by-step instructions:
 
 4. Activate this environment with ``source activate astroconda``. (NB: Conda is only compatible with a BASH shell.)
 
-5. Install the Pandeia engine with this command: ``pip install pandeia.engine``. (You *should* already have the Pysynphot package installed at this point. If you don't, install it with ``pip install pysypnphot``. You can generate a list of installed packages with ``conda list``.)
+5. Install the Pandeia engine following its `instructions on JDox <https://jwst-docs.stsci.edu/jwst-exposure-time-calculator-overview/jwst-etc-pandeia-engine-tutorial/installing-pandeia>`_, in particular with this command: ``pip install pandeia.engine``. (You *should* already have the Pysynphot package installed at this point. If you don't, install it with ``pip install pysynphot`` or ``conda install pysynphot``. You can generate a list of installed packages with ``conda list``.)
 
-6. Download and unzip the matching Pandeia data files from the `Pandeia pypi page <http://ssb.stsci.edu/pandeia/engine/>`_ and the PySynphot data files (ftp://archive.stsci.edu/pub/hst/pysynphot/). See `Installing PySynphot Data Files`_ for more detail on setting up the PySynphot data files.
+6. Download and install the matching Pandeia data files and the PySynphot data files. See the `instructions on JDox <https://jwst-docs.stsci.edu/jwst-exposure-time-calculator-overview/jwst-etc-pandeia-engine-tutorial/installing-pandeia#InstallingPandeia-DataFiles>`_ for links to current versions of these files.
 
 7. Add the following lines to your ~/.bashrc file (and ``source`` it after modifying):
 
