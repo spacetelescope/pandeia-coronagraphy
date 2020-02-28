@@ -279,7 +279,7 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
             ins = webbpsf.NIRCam()
             ins.filter = instrument_config['filter']
             if CoronagraphyPSFLibrary.nircam_mode[aperture_name] == 'lw_imaging':
-                ins.detector = 'A5'
+                ins.detector = 'NRCA5'
                 ins.pixelscale = ins._pixelscale_long
         elif instrument.upper() == 'MIRI':
             ins = webbpsf.MIRI()
