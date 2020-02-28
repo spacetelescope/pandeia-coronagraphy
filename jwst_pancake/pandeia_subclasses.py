@@ -257,7 +257,7 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
         """
         Determines pupil throughput given a webbpsf instrument object
         """
-        optsys = ins._getOpticalSystem()
+        optsys = ins.get_optical_system()
         ote_pupil = optsys[0].amplitude
         coron_pupil = optsys[-2].amplitude
         pupil_throughput = coron_pupil.sum() / ote_pupil.sum()
@@ -336,7 +336,7 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
         # Create an optical system model. This is done because, in order to determine the critical angle, we need this model, and it otherwise
         #    wouldn't be generated until the PSF itself is generated. In this case, we want to generate the model early because we want to make
         #    sure that the observation *isn't* over the critical angle *before* generating the PSF
-        optsys = ins._getOpticalSystem(fft_oversample=3, detector_oversample=3, fov_arcsec=None, fov_pixels=fov_pixels)
+        optsys = ins.get_optical_system(fft_oversample=3, detector_oversample=3, fov_arcsec=None, fov_pixels=fov_pixels)
         # determine the spatial frequency which is Nyquist sampled by the input pupil.
         # convert this to units of cycles per meter and make it not a Quantity
         sf = (1./(optsys.planes[0].pixelscale * 2 * units.pixel)).to(1./units.meter).value
