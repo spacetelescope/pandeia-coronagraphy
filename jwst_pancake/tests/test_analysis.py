@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import copy
 
-import pandeia_coronagraphy.analysis
+import jwst_pancake.analysis
 import poppy
 import webbpsf
 
@@ -22,7 +22,7 @@ def test_register_to_target(plot=True, box=50):
     ref = poppy.misc.airy_2d(center=(center+dx, center+dy))  # randomly offset PSF
 
 
-    aligned_ref, offy, offx, scale = pandeia_coronagraphy.analysis.register_to_target(ref, target, return_fit=True,
+    aligned_ref, offy, offx, scale = jwst_pancake.analysis.register_to_target(ref, target, return_fit=True,
                                                                                      rescale_reference=False)
 
     box_min = int(size/2-box)
@@ -96,7 +96,7 @@ def test_register_images_nircam(offset_x=None, offset_y=None, fov=6, plot=False)
 
     print("Aligning...")
     for ext in [0,1]:
-        reference_aligned[ext].data, offx, offy, scale = pandeia_coronagraphy.analysis.register_to_target(
+        reference_aligned[ext].data, offx, offy, scale = jwst_pancake.analysis.register_to_target(
                                                                        reference_offset[ext].data, # reference
                                                                        target[ext].data,  # target
                                                                        verbose=True,

@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import poppy
 
-import pandeia_coronagraphy.transformations
+import jwst_pancake.transformations
 
 
 def test_fourier_imshift(plot=False):
@@ -16,7 +16,7 @@ def test_fourier_imshift(plot=False):
     a1 = poppy.misc.airy_2d(center=(center+dx, center+dy))  # target for where it should end up
 
     # Note we have to flip the order of y and x in the call here.
-    shifted = pandeia_coronagraphy.transformations.fourier_imshift(a0, dy, dx)
+    shifted = jwst_pancake.transformations.fourier_imshift(a0, dy, dx)
 
     difference = a1-shifted
 
