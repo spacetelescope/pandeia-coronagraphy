@@ -8,7 +8,7 @@ Pandeia-Coronagraphy
 Installation
 ----
 
-It is highly recommended that you begin by installing `AstroConda <http://astroconda.readthedocs.io/en/latest/installation.html#install-astroconda>`_ (with Python 2.7 or python 3) and then follow these installation `instructions <https://jwst-docs.stsci.edu/display/JPP/JWST+ETC+Coding+Tutorial>`_ to install the Pandeia engine and the required reference files. Once Pandeia is set up, the following command will install this package:
+It is highly recommended that you begin by installing `AstroConda <http://astroconda.readthedocs.io/en/latest/installation.html#install-astroconda>`_ (with python 3.x) and then follow these installation `instructions <https://jwst-docs.stsci.edu/display/JPP/JWST+ETC+Coding+Tutorial>`_ to install the Pandeia engine and the required reference files. Once Pandeia is set up, the following command will install this package:
 
  ``pip install git+git://github.com/spacetelescope/pandeia-coronagraphy.git``
 
@@ -16,17 +16,13 @@ _____
 
 Alternatively, follow these step-by-step instructions:
 
-1. If you don't already have Anaconda or Miniconda installed, download and install either the Python 2.7 version or the Python 3 version `here <https://conda.io/miniconda.html>`_.
+1. If you don't already have Anaconda or Miniconda installed, download and install the Python 3 version `here <https://conda.io/miniconda.html>`_.
 
 2. Add the AstroConda channel to your Conda channels: 
 
  ``conda config --add channels http://ssb.stsci.edu/astroconda``
 
 3. Create a conda environment with the STScI software stack:
-
- ``conda create -n astroconda stsci python=2.7``
- 
- or
  
  ``conda create -n astroconda stsci python=3``
 
