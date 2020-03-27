@@ -77,5 +77,6 @@
       }
     }
   ],
-  "background": "medium"
+  "background": "minzodi",
+  "background_level": "benchmark"
 }

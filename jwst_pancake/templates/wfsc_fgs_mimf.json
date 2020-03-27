@@ -18,7 +18,8 @@
       "nexp": 1
     }
   },
-  "background": "medium",
+  "background": "minzodi",
+  "background_level": "benchmark",
   "calculation": {
     "noise": {
       "rn_correlation": true,
