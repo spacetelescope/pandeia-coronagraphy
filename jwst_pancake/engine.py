@@ -168,7 +168,7 @@ def perform_calculation(calcfile):
     existing_psf_library = pandeia.engine.psf_library.PSFLibrary
     existing_scene_cube = pandeia.engine.astro_spectrum.ConvolvedSceneCube
     existing_detector_signal = pandeia.engine.etc3D.DetectorSignal
-    
+
     if options.on_the_fly_PSFs:
         pandeia.engine.psf_library.PSFLibrary = CoronagraphyPSFLibrary
         pandeia.engine.instrument.PSFLibrary = CoronagraphyPSFLibrary
@@ -188,7 +188,7 @@ def perform_calculation(calcfile):
     config['calculation']['noise'] = options.noise
     config['calculation']['effects'] = options.effects
     options.current_config = deepcopy(config)
-    
+
     with warnings.catch_warnings():
         warnings.filterwarnings('ignore', category = np.VisibleDeprecationWarning) # Suppress float-indexing warnings
         results = pandeia_calculation(config)
@@ -252,7 +252,7 @@ def process_config(raw_config, target_scene, reference_scene):
 
 def calculate_subtracted(raw_config, target=None, reference=None, ta_error=False, sgd=False, stepsize=20.e-3):
     """
-    This is a function to calculate subtracted images with an optional reference image 
+    This is a function to calculate subtracted images with an optional reference image
     small-grid dither (SGD). It does the following:
         - Create a pandeia configuration file from which to build the target and reference scenes
         - [optional] construct SGD
@@ -268,21 +268,21 @@ def calculate_subtracted(raw_config, target=None, reference=None, ta_error=False
         - list of reference images
         - artificial PSF
         - subtracted image
-    
+
     Parameters
     ----------
     raw_config: string or dict
         One of:
             - file name of pandeia JSON file describing an observation
             - pandeia configuration dictionary
-            - pandeia instrument configuration from configuration dictionary 
+            - pandeia instrument configuration from configuration dictionary
               (i.e. config['configuration']['instrument'])
     target_scene: list of dict (or dict), default None
         List of Pandeia-style scene dictionaries describing the target. If not present, then the
             target scene from raw_config will be used.
     reference_scene: list of dict (or dict), default None
-        List of Pandeia-style scene dictionaries describing the reference source. If not present, 
-            then the reference scene from raw_config will be used. If a list, only the first 
+        List of Pandeia-style scene dictionaries describing the reference source. If not present,
+            then the reference scene from raw_config will be used. If a list, only the first
             element will be used (i.e. the reference source will be assumed to be a single element)
     ta_error: bool, default False
         Whether to add target acquisition error offsets to the target and reference scenes.
@@ -300,19 +300,19 @@ def calculate_subtracted(raw_config, target=None, reference=None, ta_error=False
     """
     from .scene import create_SGD, get_ta_error, offset_scene
     from .analysis import klip_projection, register_to_target
-    
+
     config = process_config(raw_config, target, reference)
 
     if ta_error:
         # add a unique TA error for the target
         errx, erry = get_ta_error()
         offset_scene(config['scene'], errx, erry)
-    
+
     if sgd:
         sgds = create_SGD(ta_error, stepsize=stepsize)
     else:
         sgds = create_SGD(ta_error, stepsize=stepsize, pattern_name="SINGLE-POINT")
-    
+
     first_config = deepcopy(config)
     offset_scene([first_config['strategy']['psf_subtraction_source']], *sgds[0])
 
@@ -339,7 +339,7 @@ def calculate_subtracted(raw_config, target=None, reference=None, ta_error=False
     artificialPSF = klip_projection(centered_target,sgd_reg)
 
     sgd_sub = centered_target - artificialPSF
-    
+
     output =    {
                     'target': target_slope,
                     'references': sgd_slopes,
@@ -366,21 +366,21 @@ def calculate_contrast_curve(raw_config, target=None, reference=None, ta_error=T
         - off-axis image
         - list of subtracted images
         - normalized contrast profile (with reference bins)
-    
+
     Parameters
     ----------
     raw_config: string or dict
         One of:
             - file name of pandeia JSON file describing an observation
             - pandeia configuration dictionary
-            - pandeia instrument configuration from configuration dictionary 
+            - pandeia instrument configuration from configuration dictionary
               (i.e. config['configuration']['instrument'])
     target: list of dict (or dict), default None
         List of Pandeia-style scene dictionaries describing the target. If not present, then the
             target scene from raw_config will be used.
     reference: list of dict (or dict), default None
-        List of Pandeia-style scene dictionaries describing the reference source. If not present, 
-            then the reference scene from raw_config will be used. If a list, only the first 
+        List of Pandeia-style scene dictionaries describing the reference source. If not present,
+            then the reference scene from raw_config will be used. If a list, only the first
             element will be used (i.e. the reference source will be assumed to be a single element)
     ta_error: bool, default False
         Whether to add target acquisition error offsets to the target and reference scenes.
@@ -401,7 +401,7 @@ def calculate_contrast_curve(raw_config, target=None, reference=None, ta_error=T
     from .scene import get_ta_error, offset_scene
     from skimage import draw
     from scipy.ndimage import convolve
-    
+
     capitalized_instruments = {
                                 "miri": 'MIRI',
                                 "nircam_sw": 'NIRCam',
@@ -411,7 +411,7 @@ def calculate_contrast_curve(raw_config, target=None, reference=None, ta_error=T
 
     config = process_config(raw_config, target, reference)
 
-    # Save existing options    
+    # Save existing options
     saved_options = options.current_options
     if not keep_options:
         options.on_the_fly_PSFs = True
@@ -453,7 +453,7 @@ def calculate_contrast_curve(raw_config, target=None, reference=None, ta_error=T
 
     # Restore original option configuration
     options.current_options = saved_options
-    
+
     print("Creating Subtraction Stack")
     subtraction_stack = np.zeros((iterations,) + target_slopes[0].shape)
     for i, (targ, ref) in enumerate(zip(target_slopes, reference_slopes)):
@@ -468,17 +468,17 @@ def calculate_contrast_curve(raw_config, target=None, reference=None, ta_error=T
     radius = 5
     aperture_image = np.zeros(image_dim)
     aperture_image[draw.circle((image_dim[0] - 1) // 2, (image_dim[1] - 1) // 2, radius)] = 1
-    
+
     print("Computing Aperture Matrix")
     aperture_matrix = analysis.aperture_matrix(aperture_image)
 
     print("Computing Noise Map")
     noise_map = analysis.noise_map(cov_matrix, aperture_matrix, image_dim)
-    
+
     print("Convolving off-axis image")
     convolved_offaxis = convolve(offaxis_slope, aperture_image, mode='constant')
     normalization = convolved_offaxis.max()
-    
+
     print("Creating Radial Profile")
     bins, profile = analysis.radial_profile(noise_map)
     normalized_profile = profile / normalization

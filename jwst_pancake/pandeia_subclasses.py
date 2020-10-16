@@ -79,9 +79,9 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
 
     def associate_offset_to_source(self, sources, instrument, aperture_name):
         '''
-        Added azimuth information for use with webbpsf. Pandeia currently does not calculate 
-        the PA and assumes azimuthal symmetry resulting in incorrect calculations when using 
-        the bar coronagraph. 
+        Added azimuth information for use with webbpsf. Pandeia currently does not calculate
+        the PA and assumes azimuthal symmetry resulting in incorrect calculations when using
+        the bar coronagraph.
         '''
         psf_offsets = self.get_offsets(instrument, aperture_name)
         psf_associations = []
@@ -91,7 +91,7 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
             psf_associations.append((source_offset_radius,source_offset_azimuth))
 
         return psf_associations
-    
+
     def get_pupil_throughput(self, wave, instrument, aperture_name):
         """
         Intended for pandeia 1.2 compatibility.
@@ -195,7 +195,10 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
         pix_scl = ins.pixelscale
         fov_pixels = CoronagraphyPSFLibrary.fov_pixels[aperture_name]
         trim_fov_pixels = CoronagraphyPSFLibrary.trim_fov_pixels[aperture_name]
-    
+
+
+
+
         psf_result = self.calc_psf(ins, wave, source_offset, oversample, pix_scl, fov_pixels, trim_fov_pixels=trim_fov_pixels)
 
         pupil_throughput = self._pupil_throughput(ins)
@@ -251,7 +254,7 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
             pupil_throughput = inf[0].header['PUPTHR']
             psf = inf[0].data
         return psf, pix_scl, diff_limit, pupil_throughput
-    
+
     @staticmethod
     def _pupil_throughput(ins):
         """
@@ -350,7 +353,7 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
             dmax = np.max([np.abs(dx), np.abs(dy)])
 
             psf_result = ins.calc_psf(monochromatic=wave*1e-6, oversample=oversample, fov_pixels=min(critical_angle_pixels, fov_pixels + 2*dmax))
-        
+
             image = psf_result[0].data
             image = np.roll(image, dx * oversample, axis=1)
             image = np.roll(image, -dy * oversample, axis=0)
@@ -364,7 +367,7 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
             psf_result = ins.calc_psf(monochromatic=wave*1e-6, oversample=oversample, fov_pixels=min(critical_angle_pixels, fov_pixels))
 
         return psf_result
-    
+
     def _log(self, level, message):
         """
         A bypass for the inability for Pandeia to do some internal python class serialization if the
@@ -417,7 +420,7 @@ class CoronagraphyConvolvedSceneCube(pandeia.engine.astro_spectrum.ConvolvedScen
     '''
     This class overrides the ConvolvedSceneCube class, and instead of using SPECTRAL_MAX_SAMPLES it
     looks for a wavelength size that should be present in the 'scene' part of the template
-    
+
     background=None, psf_library=None, webapp=False, empty_scene=False
     '''
     def __init__(self, scene, instrument, **kwargs):
@@ -458,7 +461,7 @@ class CoronagraphyDetectorSignal(CoronagraphyConvolvedSceneCube):
     '''
     Override the DetectorSignal to avoid odd issues with inheritance. Unfortunately this currently
     means copying the functions entirely (with changes to which class is used)
-    
+
     webapp=False, order=None, empty_scene=False
     '''
     def __init__(self, observation, calc_config=CalculationConfig(), **kwargs):
@@ -477,11 +480,11 @@ class CoronagraphyDetectorSignal(CoronagraphyConvolvedSceneCube):
             del kwargs['order']
         # and configure the instrument for that order
         self.current_instrument.order = self.order
-        
+
         # Get optional arguments
         webapp = kwargs.get('webapp', False)
         empty_scene = kwargs.get('empty_scene', False)
-        
+
         # Add coronagraphy-specific PSF library for on-the-fly PSF generation
         kwargs['psf_library'] = CoronagraphyPSFLibrary()
 
@@ -502,7 +505,7 @@ class CoronagraphyDetectorSignal(CoronagraphyConvolvedSceneCube):
             self.background = bg.Background(self.observation, webapp=webapp)
         else:
             self.background = None
-        
+
         kwargs['background'] = self.background
 
         # Then initialize the flux and wavelength grid
@@ -512,7 +515,7 @@ class CoronagraphyDetectorSignal(CoronagraphyConvolvedSceneCube):
             self.current_instrument,
             **kwargs
         )
-        
+
         self.warnings.update(self.background.warnings)
         # We have to propagate the background through the system transmission
         # to get the background in e-/s/pixel/micron. The background rate is a 1D spectrum.
@@ -587,13 +590,13 @@ class CoronagraphyDetectorSignal(CoronagraphyConvolvedSceneCube):
         else:
             saturation_fraction = exposure_spec.saturation_time / (self.det_pars['fullwell'] / self.rate_plus_bg)
         self.fraction_saturation = np.max(saturation_fraction)
-        
+
         self.detector_pixels = self.current_instrument.get_detector_pixels(self.wave_pix)
 
         # Get the read noise correlation matrix and store it as an attribute.
         if self.det_pars['rn_correlation']:
             self.read_noise_correlation_matrix = self.current_instrument.get_readnoise_correlation_matrix(self.rate.shape)
-    
+
     def spectral_detector_transform(self):
         """
         Create engine API format dict section containing properties of wavelength coordinates
@@ -1208,7 +1211,7 @@ class CoronagraphyDetectorSignal(CoronagraphyConvolvedSceneCube):
 
 class SeparateTargetReferenceCoronagraphy(Coronagraphy):
     '''
-    This class is intended to override the cronography behaviour of requiring that the reference 
+    This class is intended to override the cronography behaviour of requiring that the reference
     source be included in the same calculation template as the observation source.
     '''
 
@@ -1269,4 +1272,4 @@ class SeparateTargetReferenceCoronagraphy(Coronagraphy):
         # that product subscripts should always be tuples or regular ndarrays.
         product_subscript = (np.array(product_subscript[0]).flatten(), np.array(product_subscript[1]).flatten())
         return weight_matrix, [product_subscript]
-    
+
