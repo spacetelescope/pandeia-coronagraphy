@@ -27,7 +27,7 @@ def configure_star(calc_input, kmag=9, sptype='g2v'):
     # Define target
     refstar = calc_input['scene'][0]
     refstar['spectrum']['normalization']['type'] = 'photsys'
-    refstar['spectrum']['normalization']['bandpass'] = 'bessel,k'
+    refstar['spectrum']['normalization']['bandpass'] = 'bessell,k'
     refstar['spectrum']['normalization']['norm_flux'] = kmag
     refstar['spectrum']['normalization']['norm_fluxunit'] = 'vegamag'
     refstar['spectrum']['sed']['key'] = sptype
@@ -47,13 +47,13 @@ def configure_telescope(step='mimf', defocus_waves=0.0):
         raise ValueError("Don't know how to configure for step={} yet".format(step))
 
 
-def configure_readout(calc_input, ngroup=10, nint=1, nexp=1, readmode=None):
+def configure_readout(calc_input, ngroup=10, nint=1, nexp=1, readout_pattern='rapid'):
     """ Convenience function for configuring the detector readout."""
     calc_input['configuration']['detector']['ngroup'] = ngroup
     calc_input['configuration']['detector']['nint'] = nint
     calc_input['configuration']['detector']['nexp'] = nexp
-    if readmode is not None:
-        calc_input['configuration']['detector']['readmode'] = readmode
+    if readout_pattern is not None:
+        calc_input['configuration']['detector']['readout_pattern'] = readout_pattern
 
 
 ##### Calculation related functions ####
@@ -137,8 +137,11 @@ def assess_well_fraction(results, verbose=False):
     # Note there are several subtle variants of integration time; we want
     # the 'saturation time' which is generally equal to the ramp time
     # unless there are initial dropped frames.
-    inttime = results['information']['exposure_specification']['saturation_time']
+    inttime_tot = results['information']['exposure_specification']['saturation_time'] # this is across all ints
     instr =  engine.InstrumentFactory(results['input']['configuration'])
+
+    nint = results['information']['exposure_specification']['nint']
+    inttime = inttime_tot / nint
 
     det_pars = instr.det_pars
     if instr.inst_name=='nircam':
@@ -167,7 +170,7 @@ def assess_well_fraction(results, verbose=False):
 def describe_obs(obsdict):
     """Produce label text for plot suptitle"""
     return("""{3} observation with {1}.
-    {0[detector][readmode]}, ngroups={0[detector][ngroup]}, nints={0[detector][nint]}, nexps={0[detector][nexp]}
+    {0[detector][readout_pattern]}, ngroups={0[detector][ngroup]}, nints={0[detector][nint]}, nexps={0[detector][nexp]}
 Target is K={2[normalization][norm_flux]:.1f}, SpType={2[sed][key]}""".format(
         obsdict['configuration'],
         obsdict['configuration']['instrument']['filter'].upper(),
@@ -198,8 +201,8 @@ def display_one_image(image, scale, imagecrop=None, ax=None,**kwargs):
 
 
 def display_mimf_etc_results(results):
-    from pandeia_coronagraphy.wfsc import (display_one_image, colorbar_setup_helper,
-        calc_sbr, assess_well_fraction, describe_obs)
+    #from jwst_pancake.wfsc import (display_one_image, colorbar_setup_helper,
+    #    calc_sbr, assess_well_fraction, describe_obs)
 
     fig = plt.figure(figsize=(20,9))
     plt.subplots_adjust(top=0.8)

@@ -50,7 +50,6 @@ from . import analysis
 # Initialize the engine options
 options = EngineConfiguration()
 
-latest_on_the_fly_PSF = None
 cache_maxsize = 256     # Number of monochromatic PSFs stored in an LRU cache
                         # Should speed up calculations that involve modifying things
                         # like exposure time and don't actually require calculating new PSFs.
@@ -202,6 +201,14 @@ def perform_calculation(calcfile):
     pandeia.engine.instrument.PSFLibrary = existing_psf_library
     pandeia.engine.astro_spectrum.ConvolvedSceneCube = existing_scene_cube
     pandeia.engine.etc3D.DetectorSignal = existing_detector_signal
+
+    if options.on_the_fly_PSFs:
+        # Append PSF that was computed on-the-fly
+        from .pandeia_subclasses import latest_on_the_fly_PSF
+        results['psf'] = latest_on_the_fly_PSF
+        if options.verbose:
+            print("Added latest on-the-fly PSF to results dict.")
+
 
     return results
 

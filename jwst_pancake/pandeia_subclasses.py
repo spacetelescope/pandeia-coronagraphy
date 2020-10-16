@@ -52,6 +52,8 @@ PandeiaDetectorSignal = DetectorSignal
 from .config import EngineConfiguration
 from . import templates
 
+latest_on_the_fly_PSF = None    # For storing PSFs for later examination and plotting
+
 cache_maxsize = 256     # Number of monochromatic PSFs stored in an LRU cache
                         # Should speed up calculations that involve modifying things
                         # like exposure time and don't actually require calculating new PSFs.
@@ -100,18 +102,24 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
             return super(CoronagraphyPSFLibrary, self).get_pupil_throughput(wave, instrument, aperture_name)
         ins = CoronagraphyPSFLibrary._get_instrument(instrument, aperture_name)
         return CoronagraphyPSFLibrary._pupil_throughput(ins)
-    
+
     @staticmethod
     @lru_cache(maxsize=cache_maxsize)
     def get_cached_psf( wave, instrument, aperture_name, oversample=None, source_offset=(0, 0), otf_options=None, full_aperture=None):
         from .engine import options
         #Make the instrument and determine the mode
+        global latest_on_the_fly_PSF
+        print(f"In get_cached_psf {wave} {instrument} {aperture_name}")
         ins = CoronagraphyPSFLibrary._get_instrument(instrument, aperture_name, source_offset)
         pix_scl = ins.pixelscale
-        fov_pixels = CoronagraphyPSFLibrary.fov_pixels[aperture_name]
-        trim_fov_pixels = CoronagraphyPSFLibrary.trim_fov_pixels[aperture_name]
-        
-        psf_result = CoronagraphyPSFLibrary.calc_psf(ins, wave, source_offset, oversample, pix_scl, 
+        try:
+            fov_pixels = CoronagraphyPSFLibrary.fov_pixels[aperture_name]
+            trim_fov_pixels = CoronagraphyPSFLibrary.trim_fov_pixels[aperture_name]
+        except KeyError:
+            # for WFSC path
+            _im_mask, _pupil_mask, fov_pixels, trim_fov_pixels, _pix_scl, _mode = CoronagraphyPSFLibrary.parse_aperture(aperture_name, instrument.upper())
+
+        psf_result = CoronagraphyPSFLibrary.calc_psf(ins, wave, source_offset, oversample, pix_scl,
                                                      fov_pixels, trim_fov_pixels=trim_fov_pixels)
 
         pupil_throughput = CoronagraphyPSFLibrary._pupil_throughput(ins)
@@ -133,10 +141,14 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
             'source_offset': source_offset,
             'pupil_throughput': pupil_throughput
         }
+        latest_on_the_fly_PSF = deepcopy(psf)
+        print('   set latest')
 
         return psf
 
     def get_psf(self, wave, instrument, aperture_name, oversample=None, source_offset=(0, 0), otf_options=None, full_aperture=None):
+
+        global latest_on_the_fly_PSF
 
         cache = self._options.cache
         if oversample is None:
@@ -220,7 +232,9 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
             'source_offset': source_offset,
             'pupil_throughput': pupil_throughput
         }
-        
+
+        latest_on_the_fly_PSF = deepcopy(psf)
+
         if cache == 'disk':
             psf_result[0].header['PUPTHR'] = pupil_throughput
             psf_result.writeto(os.path.join(self._cache_path, psf_name))
@@ -231,10 +245,10 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
     def get_pix_scale(self, instrument, aperture_name):
         """
         Get PSF pixel scale for given instrument/aperture.
-        
+
         OVERRIDE Pandeia so as to make sure that the pixel scale comes out correctly.
         """
-        aperture_dict = self.parse_aperture(aperture_name)
+        aperture_dict = self.parse_aperture(aperture_name, instrument.upper())
         upsample = self.get_upsamp(instrument, aperture_name)
         return aperture_dict[4]/upsample
 
@@ -265,13 +279,17 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
         coron_pupil = optsys[-2].amplitude
         pupil_throughput = coron_pupil.sum() / ote_pupil.sum()
         return pupil_throughput
-    
+
     @staticmethod
     def _get_instrument(instrument, aperture_name, source_offset=None):
         from .engine import options as pancake_options
         instrument_config = pancake_options.current_config['configuration']['instrument']
         scene_config = pancake_options.current_config['scene']
-        ref_config = pancake_options.current_config['strategy']['psf_subtraction_source']
+        try:
+            ref_config = pancake_options.current_config['strategy']['psf_subtraction_source']
+        except:
+            # for WFSC mode, work around a lack of any such thing as a PSF subtraction source
+            ref_config = scene_config[0]
         if source_offset is None:
             offset_x = max([x['position']['x_offset'] for x in scene_config] + [ref_config['position']['x_offset']])
             offset_y = max([x['position']['y_offset'] for x in scene_config] + [ref_config['position']['y_offset']])
@@ -288,7 +306,8 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
             ins = webbpsf.MIRI()
             ins.filter = instrument_config['filter']
         else:
-            raise ValueError('Only NIRCam and MIRI are supported instruments!')
+            webbpsf.Instrument(instrument)
+            ins.filter = instrument_config['filter']
         ins.image_mask = CoronagraphyPSFLibrary.image_mask[aperture_name]
         ins.pupil_mask = CoronagraphyPSFLibrary.pupil_mask[aperture_name]
         for key in pancake_options.on_the_fly_webbpsf_options:
@@ -301,31 +320,55 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
         ins.options['output_mode'] = 'oversampled'
         ins.options['parity'] = 'odd'
         return ins
-    
+
     @staticmethod
-    def parse_aperture(aperture_name):
+    def parse_aperture(aperture_name, instrument_name):
         '''
         Return [image mask, pupil mask, fov_pixels, trim_fov_pixels, pixelscale]
         '''
-    
-        aperture_keys = ['mask210r','mask335r','mask430r','masklwb','maskswb','fqpm1065','fqpm1140','fqpm1550','lyot2300']
-        assert aperture_name in aperture_keys, 'Aperture {} not recognized! Must be one of {}'.format(aperture_name, aperture_keys)
 
-        nc = webbpsf.NIRCam()
-        miri = webbpsf.MIRI()
 
-        aperture_dict = {
-            'mask210r' : ['MASK210R','CIRCLYOT', 101, None, nc._pixelscale_short, 'sw_imaging'],
-            'mask335r' : ['MASK335R','CIRCLYOT', 101, None, nc._pixelscale_long, 'lw_imaging'],
-            'mask430r' : ['MASK430R','CIRCLYOT', 101, None, nc._pixelscale_long, 'lw_imaging'],
-            'masklwb' : ['MASKLWB','WEDGELYOT', 351, 101, nc._pixelscale_long, 'lw_imaging'],
-            'maskswb' : ['MASKSWB','WEDGELYOT', 351, 101, nc._pixelscale_short, 'sw_imaging'],
-            'fqpm1065' : ['FQPM1065','MASKFQPM', 81, None, miri.pixelscale, 'imaging'],
-            'fqpm1140' : ['FQPM1140','MASKFQPM', 81, None, miri.pixelscale, 'imaging'],
-            'fqpm1550' : ['FQPM1550','MASKFQPM', 81, None, miri.pixelscale, 'imaging'],
-            'lyot2300' : ['LYOT2300','MASKLYOT', 81, None, miri.pixelscale, 'imaging']
+        if instrument_name == 'NIRCAM':
+            nc = webbpsf.NIRCam()
+            aperture_dict = {  # WebbPSF image_mask, pupil_mask, fov_pixels, trim_fov_pixels, pixelscale, mode
+                'mask210r': ['MASK210R', 'CIRCLYOT', 101, None, nc._pixelscale_short, 'sw_imaging'],
+                'mask335r': ['MASK335R', 'CIRCLYOT', 101, None, nc._pixelscale_long, 'lw_imaging'],
+                'mask430r': ['MASK430R', 'CIRCLYOT', 101, None, nc._pixelscale_long, 'lw_imaging'],
+                'masklwb': ['MASKLWB', 'WEDGELYOT', 351, 101, nc._pixelscale_long, 'lw_imaging'],
+                'maskswb': ['MASKSWB', 'WEDGELYOT', 351, 101, nc._pixelscale_short, 'sw_imaging'],
+                'sw': [None, None, 155, None, nc._pixelscale_short, 'sw_imaging'],
+                'lw': [None, None, 101, None, nc._pixelscale_short, 'lw_imaging'],
             }
-    
+        elif instrument_name == 'MIRI':
+            miri = webbpsf.MIRI()
+            aperture_dict = {  # WebbPSF image_mask, pupil_mask, fov_pixels, trim_fov_pixels, pixelscale
+                'fqpm1065': ['FQPM1065', 'MASKFQPM', 81, None, miri.pixelscale, 'imaging'],
+                'fqpm1140': ['FQPM1140', 'MASKFQPM', 81, None, miri.pixelscale, 'imaging'],
+                'fqpm1550': ['FQPM1550', 'MASKFQPM', 81, None, miri.pixelscale, 'imaging'],
+                'lyot2300': ['LYOT2300', 'MASKLYOT', 81, None, miri.pixelscale, 'imaging'],
+                'imager': [None, None, 81, None, 0.11],  # slightly diff from the 0.111 in webbpsf, but has to match Pandeia
+                # exactly or we trigger an error in engine.astro_spectrum.AdvancedPSF
+                # I dunno why this is the case for MIRI imaging but not coronagraphy. ??
+            }
+        elif instrument_name == 'NIRISS' or instrument_name == 'FGS':
+            desired_psf_size = {'NIRISS': 81, 'NIRSPEC': 41, "FGS": 81}
+            inst = webbpsf.Instrument(instrument_name)
+            aperture_dict = {  # WebbPSF image_mask, pupil_mask, fov_pixels, trim_fov_pixels, pixelscale
+                'imager': [None, None, desired_psf_size[instrument_name], None, inst.pixelscale, 'imaging'],
+            }
+        elif instrument_name == 'NIRSPEC':
+            ns = webbpsf.NIRSpec()
+            ns.pixelscale = 0.106  # TODO determine why Pandeia wants .106 instead of .1043. But for now just adapt to match!.
+            # TODO we could read this from the [aperturename]['pix'] values in the config JSON for NIRSpec
+            aperture_dict = {  # WebbPSF image_mask, pupil_mask, fov_pixels, trim_fov_pixels, pixelscale
+                'shutter': ['MSA all open', 'NIRSpec grating', 41, None, ns.pixelscale, 'imaging'],
+                's1600a1': ['S1600A1', 'NIRSpec grating', 41, None, ns.pixelscale, 'imaging'],
+            }
+        else:
+            raise NotImplementedError(
+                "Instrument {} is not yet supported for on-the-fly PSFs; need to update engine.py".format(instrument_name))
+
+        assert aperture_name in aperture_dict.keys(), 'Aperture {} not recognized! Must be one of {}'.format(aperture_name, aperture_dict.keys)
         return aperture_dict[aperture_name]
 
     @staticmethod
@@ -384,34 +427,38 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
             print("Message is: {}".format(message))
         logging_fn = getattr(logger, level.lower())
         logging_fn(message)
-    
+
     nircam_mode = {
                     'mask210r': 'sw_imaging', 'mask335r': 'lw_imaging', 'mask430r': 'lw_imaging',
                     'masklwb': 'lw_imaging', 'maskswb': 'sw_imaging', 'fqpm1065': 'imaging',
-                    'fqpm1140': 'imaging', 'fqpm1550': 'imaging', 'lyot2300': 'imaging'
+                    'fqpm1140': 'imaging', 'fqpm1550': 'imaging', 'lyot2300': 'imaging',
+                    'sw': 'sw_imaging', 'lw': 'lw_imaging'
                   }
 
     image_mask = {
                     'mask210r': 'MASK210R', 'mask335r': 'MASK335R', 'mask430r': 'MASK430R',
                     'masklwb': 'MASKLWB', 'maskswb': 'MASKSWB', 'fqpm1065': 'FQPM1065',
-                    'fqpm1140': 'FQPM1140', 'fqpm1550': 'FQPM1550', 'lyot2300': 'LYOT2300'
+                    'fqpm1140': 'FQPM1140', 'fqpm1550': 'FQPM1550', 'lyot2300': 'LYOT2300',
+                    'sw': None, 'lw': None, 'imaging': None
                  }
-    
+
     pupil_mask = {
-                    'mask210r': 'CIRCLYOT', 'mask335r': 'CIRCLYOT', 'mask430r': 'CIRCLYOT', 
-                    'masklwb': 'WEDGELYOT', 'maskswb': 'WEDGELYOT', 'fqpm1065': 'MASKFQPM', 
-                    'fqpm1140': 'MASKFQPM', 'fqpm1550': 'MASKFQPM', 'lyot2300': 'MASKLYOT'
+                    'mask210r': 'CIRCLYOT', 'mask335r': 'CIRCLYOT', 'mask430r': 'CIRCLYOT',
+                    'masklwb': 'WEDGELYOT', 'maskswb': 'WEDGELYOT', 'fqpm1065': 'MASKFQPM',
+                    'fqpm1140': 'MASKFQPM', 'fqpm1550': 'MASKFQPM', 'lyot2300': 'MASKLYOT',
+                    'sw': None, 'lw': None, 'imaging': None
                  }
-    
+
     fov_pixels = {
-                    'mask210r': 101, 'mask335r': 101, 'mask430r': 101, 'masklwb': 351, 
-                    'maskswb': 351, 'fqpm1065': 81, 'fqpm1140': 81, 'fqpm1550': 81, 
-                    'lyot2300': 81
+                    'mask210r': 101, 'mask335r': 101, 'mask430r': 101, 'masklwb': 351,
+                    'maskswb': 351, 'fqpm1065': 81, 'fqpm1140': 81, 'fqpm1550': 81,
+                    'lyot2300': 81,
+                     'sw': 155, 'lw': 101, 'imaging': 81,
                  }
-    
+
     trim_fov_pixels = {
-                        'mask210r': None, 'mask335r': None, 'mask430r': None, 'masklwb': 101, 
-                        'maskswb': 101, 'fqpm1065': None, 'fqpm1140': None, 'fqpm1550': None, 
+                        'mask210r': None, 'mask335r': None, 'mask430r': None, 'masklwb': 101,
+                        'maskswb': 101, 'fqpm1065': None, 'fqpm1140': None, 'fqpm1550': None,
                         'lyot2300': None
                       }
 
