@@ -13,7 +13,7 @@
     "detector": {
       "subarray": "full",
       "nint": 3,
-      "readmode": "nisrapid",
+      "readout_pattern": "nisrapid",
       "ngroup": 10,
       "nexp": 1
     }

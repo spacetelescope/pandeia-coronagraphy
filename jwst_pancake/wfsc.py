@@ -262,7 +262,8 @@ def display_mimf_etc_results(results):
 import pandeia.engine.jwst, pandeia.engine.instrument_factory
 class FGS(pandeia.engine.jwst.JWSTInstrument):
     """ HIGHLY UNOFFICIAL & UNSUPPORTED FGS IMPLEMENTATION
-    DO NOT DISTRIBUTE OUTSIDE OF STSCI
+    NOT INTENDED FOR USE OUTSIDE OF STSCI
+    THIS IS A HACK -- USE AT YOUR OWN RISK -- BETTER YET, DON'T USE
 
     FGS has nothing besides an imager, so does not need any functions subclassed.
     """

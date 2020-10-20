@@ -19,7 +19,7 @@
       "nexp": 1,
       "nint": 1,
       "ngroup": 3,
-      "readmode": "nrsrapid",
+      "readout_pattern": "nrsrapid",
       "subarray": "full"
     },
     "scene_size": 6.0,

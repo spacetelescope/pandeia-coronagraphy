@@ -16,7 +16,7 @@
   "configuration": {
     "max_scene_size": 10.0,
     "detector": {
-      "readmode": "rapid",
+      "readout_pattern": "rapid",
       "ngroup": 15,
       "nexp": 1,
       "subarray": "full",
