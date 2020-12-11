@@ -184,6 +184,8 @@ def perform_calculation(calcfile):
         pandeia.engine.observation.Observation.get_random_seed = random_seed
 
     config = deepcopy(calcfile)
+    if not 'calculation' in config: # some templates leave this out; create empty dict if needed
+        config['calculation'] = dict()
     config['calculation']['noise'] = options.noise
     config['calculation']['effects'] = options.effects
     options.current_config = deepcopy(config)
@@ -219,6 +221,7 @@ def random_seed(self):
     '''
     #np.random.seed(None) # Reset the seed if already set
     #return np.random.randint(0, 2**32 - 1) # Find a new one
+    print("JWST Pancake override: using random seed in pandeia!")
     return None
 
 def process_config(raw_config, target_scene, reference_scene):

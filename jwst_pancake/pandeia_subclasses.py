@@ -338,6 +338,7 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
                 'maskswb': ['MASKSWB', 'WEDGELYOT', 351, 101, nc._pixelscale_short, 'sw_imaging'],
                 'sw': [None, None, 155, None, nc._pixelscale_short, 'sw_imaging'],
                 'lw': [None, None, 101, None, nc._pixelscale_short, 'lw_imaging'],
+                'wlp8__ts': [None, None, 155, None, nc._pixelscale_short, 'sw_ts'], # for consistency with ETC's mode for weak lenses
             }
         elif instrument_name == 'MIRI':
             miri = webbpsf.MIRI()
@@ -368,7 +369,7 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
             raise NotImplementedError(
                 "Instrument {} is not yet supported for on-the-fly PSFs; need to update engine.py".format(instrument_name))
 
-        assert aperture_name in aperture_dict.keys(), 'Aperture {} not recognized! Must be one of {}'.format(aperture_name, aperture_dict.keys)
+        assert aperture_name in aperture_dict.keys(), 'Aperture {} not recognized! Must be one of {}'.format(aperture_name, list(aperture_dict.keys))
         return aperture_dict[aperture_name]
 
     @staticmethod
@@ -428,32 +429,35 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
         logging_fn = getattr(logger, level.lower())
         logging_fn(message)
 
+    # The ETC has a mode, 'wlp8__ts', for the use of the +8 waves weak lens for time series photometry
+    # Only the +8 lens is supported in that mode. Here we hack in similar modes for +4 and +12, 
+    # even though no such modes are supported in science ops or the ETC pandeia engine default config.
     nircam_mode = {
                     'mask210r': 'sw_imaging', 'mask335r': 'lw_imaging', 'mask430r': 'lw_imaging',
                     'masklwb': 'lw_imaging', 'maskswb': 'sw_imaging', 'fqpm1065': 'imaging',
                     'fqpm1140': 'imaging', 'fqpm1550': 'imaging', 'lyot2300': 'imaging',
-                    'sw': 'sw_imaging', 'lw': 'lw_imaging'
+                    'sw': 'sw_imaging', 'lw': 'lw_imaging', 'wlp8__ts': 'sw_ts', 'wlp12__ts': 'sw_ts', 'wlp4__ts': 'sw_ts'
                   }
 
     image_mask = {
                     'mask210r': 'MASK210R', 'mask335r': 'MASK335R', 'mask430r': 'MASK430R',
                     'masklwb': 'MASKLWB', 'maskswb': 'MASKSWB', 'fqpm1065': 'FQPM1065',
                     'fqpm1140': 'FQPM1140', 'fqpm1550': 'FQPM1550', 'lyot2300': 'LYOT2300',
-                    'sw': None, 'lw': None, 'imaging': None
+                    'sw': None, 'lw': None, 'imaging': None, 'wlp8__ts': None, 'wlp12__ts': None, 'wlp4__ts': None
                  }
 
     pupil_mask = {
                     'mask210r': 'CIRCLYOT', 'mask335r': 'CIRCLYOT', 'mask430r': 'CIRCLYOT',
                     'masklwb': 'WEDGELYOT', 'maskswb': 'WEDGELYOT', 'fqpm1065': 'MASKFQPM',
                     'fqpm1140': 'MASKFQPM', 'fqpm1550': 'MASKFQPM', 'lyot2300': 'MASKLYOT',
-                    'sw': None, 'lw': None, 'imaging': None
+                    'sw': None, 'lw': None, 'imaging': None, 'wlp8__ts': 'WLP8', 'wlp12__ts': 'WLP12', 'wlp4__ts': 'WLP4'
                  }
 
     fov_pixels = {
                     'mask210r': 101, 'mask335r': 101, 'mask430r': 101, 'masklwb': 351,
                     'maskswb': 351, 'fqpm1065': 81, 'fqpm1140': 81, 'fqpm1550': 81,
                     'lyot2300': 81,
-                     'sw': 155, 'lw': 101, 'imaging': 81,
+                    'sw': 155, 'lw': 101, 'imaging': 81, 'wlp8__ts': 201, 'wlp4__ts': 201, 'wlp12__ts': 201 
                  }
 
     trim_fov_pixels = {

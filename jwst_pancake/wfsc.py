@@ -34,8 +34,12 @@ def configure_star(calc_input, kmag=9, sptype='g2v'):
     refstar['spectrum']['sed']['sed_type'] = 'phoenix'
 
 
-def configure_telescope(step='mimf', defocus_waves=0.0):
-    """ Convenience function for configuring the telescope """
+def configure_telescope(step='mimf', defocus_waves=0.0, jitter_sigma=0.007, jitter='gaussian'):
+    """ Convenience function for configuring the telescope
+
+    defocus_waves : waves of defocus, at 2 microns wavelength
+    jitter, jitter_sigma : parameters for jitter model. See WebbPSF docs.
+    """
     if not engine.options.on_the_fly_PSFs:
         engine.options.on_the_fly_PSFs =  True
         print("Enabling on-the-fly PSFs for ETC calculations")
@@ -45,6 +49,9 @@ def configure_telescope(step='mimf', defocus_waves=0.0):
         engine.options.on_the_fly_webbpsf_options['defocus_wavelength'] = 2e-6
     else:
         raise ValueError("Don't know how to configure for step={} yet".format(step))
+
+    engine.options.on_the_fly_webbpsf_options['jitter'] = jitter
+    engine.options.on_the_fly_webbpsf_options['jitter_sigma'] = jitter_sigma
 
 
 def configure_readout(calc_input, ngroup=10, nint=1, nexp=1, readout_pattern='rapid'):
@@ -101,7 +108,12 @@ def autosize_hex_mask(results):
     colsum = np.sum(results['2d']['detector'],axis=0)
     thresh=colsum.max()/4
     pixscale = results['psf']['pix_scl']* results['psf']['upsamp']
-    boxwidth = (np.max(np.where(colsum>thresh))-np.min(np.where(colsum>thresh)))*pixscale
+    try:
+        boxwidth = (np.max(np.where(colsum>thresh))-np.min(np.where(colsum>thresh)))*pixscale
+    except:
+        import warnings
+        warnings.warn("Unable to auto-size box width. Falling back to 10 pix default.")
+        boxwidth = 10*pixscale
 
     # generate a hexagon mask that matches.
     wf= poppy.Wavefront(pixelscale=pixscale,npix=results['2d']['detector'].shape[0])
@@ -200,9 +212,7 @@ def display_one_image(image, scale, imagecrop=None, ax=None,**kwargs):
     return im
 
 
-def display_mimf_etc_results(results):
-    #from jwst_pancake.wfsc import (display_one_image, colorbar_setup_helper,
-    #    calc_sbr, assess_well_fraction, describe_obs)
+def display_mimf_etc_results(results, verbose=True):
 
     fig = plt.figure(figsize=(20,9))
     plt.subplots_adjust(top=0.8)
@@ -210,7 +220,6 @@ def display_mimf_etc_results(results):
     # Display PSF
     ax1=plt.subplot(131)
     display_one_image(results['psf']['int'], results['psf']['pix_scl'])
-    #plt.imshow(results['psf']['int'], vmin=0, extent=extent)
     plt.title("Oversampled Monochromatic Input PSF \n(WebbPSF on-the-fly)")
     plt.ylabel("Arcsec")
     colorbar_setup_helper(label='Fractional Counts', mappable=ax1.images[0])
@@ -229,6 +238,13 @@ def display_mimf_etc_results(results):
         transform=ax2.transAxes, fontsize=15)
 
     SBR, mask = calc_sbr(results, return_mask=True)
+    results['mask']=mask
+    results['SBR']=SBR
+    if verbose:
+        print(f"SBR: {SBR}")
+        print(f"Mean count rate within mask: {(results['2d']['detector'][mask]).mean():.1f} e-/sec")
+        print(f"Total count rate: {(results['2d']['detector']).sum():.1f} e-/sec")
+        print(f"SBR and mask have been added to results dict")
 
     # Display SNR
     ax3=plt.subplot(133)
