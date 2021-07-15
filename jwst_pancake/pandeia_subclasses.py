@@ -62,7 +62,7 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
     Subclass of the Pandeia PSFLibrary class, intended to allow PSFs to be generated on-the-fly
     via webbpsf rather than using cached PSFs
     '''
-    def __init__(self, path=None, aperture='all', cache_path=None):
+    def __init__(self, path=None, aperture='all'):
         from .engine import options
         self._options = options
         self._log("debug", "CUSTOM PSF LIBRARY ACTIVATE!")
@@ -73,8 +73,8 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
                 path = os.path.join(os.environ['pandeia_refdata'], tel, ins, 'psfs')
         super(CoronagraphyPSFLibrary, self).__init__(path, aperture)
         self.latest_on_the_fly_PSF = None
-        self._cache_path = cache_path
-        if cache_path is None:
+        self._cache_path = options.cache_path
+        if self._cache_path is None:
             self._cache_path = os.getcwd()
 
     def associate_offset_to_source(self, sources, instrument, aperture_name):
@@ -160,7 +160,7 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
 
         self._log("info", "Getting {} {} {}... with caching {}".format(instrument, aperture_name, wave, cache))
         if cache == 'disk':
-            psf_name = 'cached_{:.5f}_{}_{}_{:.3f}_{:.3f}_{}.fits'.format(wave, instrument, aperture_name, source_offset[0], source_offset[1], oversample)
+            psf_name = 'cached_{:.5f}_{}_{}_{:.5f}_{:.5f}_{}.fits'.format(wave, instrument, aperture_name, source_offset[0], source_offset[1], oversample)
             if self._have_psf(psf_name):
                 self._log("info", " Found in cache")
                 psf_flux, pix_scl, diff_limit, pupil_throughput = self._get_psf(psf_name)
@@ -179,7 +179,13 @@ class CoronagraphyPSFLibrary(PSFLibrary, object):
         elif cache == 'ram':
             # At this point, splice in the cache wrapper code, since we're testing moving the lru_cache out of the class to see what happens
             # Include the on-the-fly override options in the hash key for the lru_cache
-            otf_options = tuple(sorted(self._options.on_the_fly_webbpsf_options.items()) + [self._options.on_the_fly_webbpsf_opd,])
+
+            if isinstance(self._options.on_the_fly_webbpsf_opd, fits.HDUList):
+                opd = self._options.on_the_fly_webbpsf_opd[0]
+            else:
+                opd = self._options.on_the_fly_webbpsf_opd
+
+            otf_options = tuple(sorted(self._options.on_the_fly_webbpsf_options.items()) + [opd,])
 
             # this may be needed in get_psf; extract it so we can avoid
             # passing in 'self', which isn't hashable for the cache lookup

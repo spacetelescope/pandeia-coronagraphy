@@ -5,6 +5,8 @@ from . import analysis
 from . import engine
 from . import transformations
 from . import utilities
+from . import sequence
+from . import io
 
 import os, sys
 __version__ = "UNDEFINED"

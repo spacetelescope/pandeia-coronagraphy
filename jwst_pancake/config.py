@@ -22,7 +22,7 @@ class EngineConfiguration(object):
                                'on_the_fly_webbpsf_options': {}, 'on_the_fly_webbpsf_opd': None,
                                'on_the_fly_oversample': 3, 'pandeia_fixed_seed': False, 
                                'cache': 'ram', 'noise': self.default_noise, 
-                               'effects': self.default_effects, 'verbose': False}
+                               'effects': self.default_effects, 'verbose': False, 'cache_path': None}
         for item in self.default_params.keys():
             setattr(self, "_"+item, kwargs.get(item, self.default_params[item]))
         self._config = None

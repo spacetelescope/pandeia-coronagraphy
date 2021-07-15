@@ -54,8 +54,6 @@ latest_on_the_fly_PSF = None
 cache_maxsize = 256     # Number of monochromatic PSFs stored in an LRU cache
                         # Should speed up calculations that involve modifying things
                         # like exposure time and don't actually require calculating new PSFs.
-
-
 def get_template(filename):
     ''' Look up a template filename.
     '''
