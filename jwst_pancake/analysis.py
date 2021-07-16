@@ -497,6 +497,56 @@ def get_companion_mask(companion_xy, mask_dataset, mask_psflib, offaxis_psf_stam
 
 	return comp_mask
 
+
+def meas_contrast_basic(dat, iwa, owa, resolution, center=None, low_pass_filter=True):
+    """
+	Duplicate of the meas_contrast funciton within pyKLIP, except calculating a 
+	standard 5 sigma limit instead of small sample statistics corrections. 
+
+    """
+
+    if center is None:
+        starx = dat.shape[1]//2
+        stary = dat.shape[0]//2
+    else:
+        starx, stary = center
+
+    # figure out how finely to sample the radial profile
+    dr = resolution/2.0
+    numseps = int((owa-iwa)/dr)
+    # don't want to start right at the edge of the occulting mask
+    # but also want to well sample the contrast curve so go at twice the resolution
+    seps = np.arange(numseps) * dr + iwa + resolution/2.0
+    dsep = resolution
+    # find equivalent Gaussian PSF for this resolution
+
+
+    # run a low pass filter on the data, check if input is boolean or a number
+    if not isinstance(low_pass_filter, bool):
+        # manually passed in low pass filter size
+        sigma = low_pass_filter
+        filtered = pyklip.klip.nan_gaussian_filter(dat, sigma)
+    elif low_pass_filter:
+        # set low pass filter size to be same as resolution element
+        sigma = dsep / 2.355  # assume resolution element size corresponds to FWHM
+        filtered = pyklip.klip. nan_gaussian_filter(dat, sigma)
+    else:
+        # no filtering
+        filtered = dat
+
+    contrast = []
+    # create a coordinate grid
+    x,y = np.meshgrid(np.arange(float(dat.shape[1])), np.arange(float(dat.shape[0])))
+    r = np.sqrt((x-starx)**2 + (y-stary)**2)
+    theta = np.arctan2(y-stary, x-starx) % 2*np.pi
+    for sep in seps:
+        # calculate noise in an annulus with width of the resolution element
+        annulus = np.where((r < sep + resolution/2) & (r > sep - resolution/2))
+        noise_mean = np.nanmean(filtered[annulus])
+        noise_std = 5*np.nanstd(filtered[annulus], ddof=1)
+
+    return seps, np.array(noise_std)
+
 def compute_contrast(subtracted_hdu_file, filt, mask, offaxis_psf_stamp, offaxis_flux, raw_input_dataset, raw_input_psflib, primary_vegamag=0, pixel_scale=0.063, annuli=1, subsections=1, numbasis=25, movement=1, subtraction='ADI', companion_xy=None, verbose=True, outputdir='./RESULTS/', plot_klip_throughput=False):
 	"""
 	Function to compute contrast curves from a pyKLIP subtracted image file. Contrast curves will be corrected for both the coronagraphic and KLIP throughput, 
@@ -600,8 +650,8 @@ def compute_contrast(subtracted_hdu_file, filt, mask, offaxis_psf_stamp, offaxis
 	uncorr_contrast_seps, uncorr_contrast = pyklip.klip.meas_contrast(dat=raw_image, iwa=inner_working_angle, owa=outer_working_angle, resolution=lambda_d_pixel, center=center, low_pass_filter=lambda_d_pixel/2.355)
 	contrast_seps, contrast = pyklip.klip.meas_contrast(dat=image, iwa=inner_working_angle, owa=outer_working_angle, resolution=lambda_d_pixel, center=center, low_pass_filter=lambda_d_pixel/2.355)
 
-	uncorr_contrast_seps_raw5sig, uncorr_contrast_raw5sig = pyklip.klip.meas_contrast(dat=raw_image, iwa=inner_working_angle, owa=outer_working_angle, resolution=1, center=center, low_pass_filter=lambda_d_pixel/2.355)
-	contrast_seps_raw5sig, contrast_raw5sig = pyklip.klip.meas_contrast(dat=image, iwa=inner_working_angle, owa=outer_working_angle, resolution=1, center=center, low_pass_filter=lambda_d_pixel/2.355)
+	uncorr_contrast_seps_raw5sig, uncorr_contrast_raw5sig = meas_contrast_basic(dat=raw_image, iwa=inner_working_angle, owa=outer_working_angle, resolution=1, center=center, low_pass_filter=lambda_d_pixel/2.355)
+	contrast_seps_raw5sig, contrast_raw5sig = meas_contrast_basic(dat=image, iwa=inner_working_angle, owa=outer_working_angle, resolution=1, center=center, low_pass_filter=lambda_d_pixel/2.355)
 
 	##### At this stage contrast is usable, but has not been calibrated for the KLIP throughput. 
 	##### Need to inject planets into the raw_image and see how well they are recovered 
@@ -887,7 +937,7 @@ def contrast_curve(pancake_results, target, references=None, subtraction='ADI', 
 	primary_sources = identify_primary_sources(pancake_results, target, references=references, target_primary_source=target_primary_source, reference_primary_sources=reference_primary_sources)
 
 	##### Start loop for creating contrast curves
-	if verbose:	print('Computing Contrast Curves...')
+	if verbose:	print('Computing Contrast Curves ({})...'.format(subtraction))
 	contrast_curve_dict = {} #This is where all the contrast curves will be saved
 	for filt in filters:
 		### Get all of the target observations based on filter 
@@ -1001,7 +1051,7 @@ def contrast_curve(pancake_results, target, references=None, subtraction='ADI', 
 				ax = plt.gca()
 				separation = contrast_curve_dict['{}+{}'.format(filt.upper(), mask.upper())]['separation_arcsec']
 				ax.plot(separation, all_contrasts['contrast'], color="#577B51", linewidth = 3, label = '5$\\sigma$ Contrast')
-				ax.plot(all_contrasts['separation_arcsec_raw5sig'], all_contrasts['contrast_raw5sig'], color="#A1BF9C", linewidth = 3, label = '5$\\sigma$ Contrast (1 Pixel Noise Scale)', ls=':')
+				ax.plot(all_contrasts['separation_arcsec_raw5sig'], all_contrasts['contrast_raw5sig'], color="#A1BF9C", linewidth = 3, label = '5$\\sigma$ Standard Deviation', ls=':')
 				# Also add companion magnitudes if necessary. 
 				if source_props['comp_seps'] != None and source_props['comp_contrasts']:
 					ax.scatter(source_props['comp_seps'], source_props['comp_contrasts'], c='w', edgecolors='k', linewidths=2, s=50)
@@ -1021,7 +1071,7 @@ def contrast_curve(pancake_results, target, references=None, subtraction='ADI', 
 				ax = plt.gca()
 				separation = contrast_curve_dict['{}+{}'.format(filt.upper(), mask.upper())]['separation_arcsec']
 				ax.plot(separation, all_contrasts['absmag'], color="#577B51", linewidth = 3, label = '5$\\sigma$ Sensitivity Limit')
-				ax.plot(all_contrasts['separation_arcsec_raw5sig'], all_contrasts['absmag_raw5sig'], color="#A1BF9C", linewidth = 3, label = '5$\\sigma$ Sensitivity Limit (1 Pixel Noise Scale)', ls=':')
+				ax.plot(all_contrasts['separation_arcsec_raw5sig'], all_contrasts['absmag_raw5sig'], color="#A1BF9C", linewidth = 3, label = '5$\\sigma$ Standard Deviation', ls=':')
 				# Also add companion magnitudes if necessary. 
 				if source_props['comp_seps'] != None and source_props['comp_vegamags']:
 					ax.scatter(source_props['comp_seps'], source_props['comp_vegamags'], c='w', edgecolors='k', linewidths=2, s=50)

@@ -89,9 +89,7 @@ class Sequence():
             for obs_dict in temp_obs_dict_array:
                 self.observation_sequence.append(obs_dict)
         else: 
-            #We need to add each of the roll exposures, making sure that all NIRCam observations happen, 
-            #then the NIRCam rolls, then all MIRI observations, then the MIRI rolls.
-
+            #We need to add each of the roll exposures, making sure that things are grouped by the coronagraph used. 
             prev_inst_index = 0
             for i, obs_dict in enumerate(temp_obs_dict_array):
                 if i == 0:
@@ -100,21 +98,21 @@ class Sequence():
                         obs_dict['strategy']['scene_rotation'] = rolls[0]
                         self.observation_sequence.append(deepcopy(obs_dict)) #Deepcopy otherwise roll will adjust all obs_dicts
                     else:
-                        #There is only a single filter in the obs dict array, no instrument changes.
+                        #There is only a single filter in the obs dict array, no coronagraph changes.
                         for roll in rolls:
                             obs_dict['strategy']['scene_rotation'] = roll
                             self.observation_sequence.append(deepcopy(obs_dict))
-                else:# i < len(temp_obs_dict_array-1):
+                else:
                     #Up to but excluding the last observation. 
-                    prev_instrument = temp_obs_dict_array[i-1]['configuration']['instrument']['instrument']
-                    curr_instrument = obs_dict['configuration']['instrument']['instrument']
-                    
-                    if prev_instrument == curr_instrument:
-                        #Instruments are the same, don't want to roll yet. 
+                    prev_aperture = temp_obs_dict_array[i-1]['configuration']['instrument']['aperture']
+                    curr_aperture = obs_dict['configuration']['instrument']['aperture']
+
+                    if prev_aperture == curr_aperture:
+                        #Coronagraphs are the same, don't want to roll yet. 
                         obs_dict['strategy']['scene_rotation'] = rolls[0]
                         self.observation_sequence.append(deepcopy(obs_dict))
                     else:
-                        #Instruments must be different, need to append the other rolls now before the instrument switch
+                        #Coronagraphs must be different, need to append the other rolls now before the switch
                         for roll in rolls[1:]:
                             for temp_obs_dict in temp_obs_dict_array[prev_inst_index:i]:
                                 temp_obs_dict['strategy']['scene_rotation'] = roll
@@ -122,19 +120,19 @@ class Sequence():
                         #Set an index for the first observation with the next instrument. 
                         prev_inst_index = i
 
-                        #Now append the new instruments first roll
+                        #Now append the new coronagraphs first roll
                         obs_dict['strategy']['scene_rotation'] = rolls[0]
                         self.observation_sequence.append(deepcopy(obs_dict))
 
                     #Check if this is the last observation
                     if i == (len(temp_obs_dict_array)-1):
-                        #Append all the rolls for the current working instrument
+                        #Append all the rolls for the current working coronagraph
                         for roll in rolls[1:]:
                             for temp_obs_dict in temp_obs_dict_array[prev_inst_index:]:
                                 temp_obs_dict['strategy']['scene_rotation'] = roll
                                 self.observation_sequence.append(deepcopy(temp_obs_dict))
 
-    def run(self, ta_error='saved', wavefront_evolution=True, on_the_fly_PSFs=False, wave_sampling=3, save_file=False, resume=False, verbose=True, cache='disk', cache_path='default' ,offaxis_x=1, offaxis_y=1, debug_verbose=False, initial_wavefront_realisation=5):
+    def run(self, ta_error='saved', wavefront_evolution=True, on_the_fly_PSFs=False, wave_sampling=3, save_file=False, resume=False, verbose=True, cache='none', cache_path='default' ,offaxis_nircam=[1,1], offaxis_miri=[1,1], debug_verbose=False, initial_wavefront_realisation=3):
         #PanCAKE adjustable options
         pancake_options = options
         pancake_options.verbose = debug_verbose
@@ -201,6 +199,11 @@ class Sequence():
             scene_name = base_obs_dict['scene_name']
             filt = base_obs_dict['configuration']['instrument']['filter']
             instrument = base_obs_dict['configuration']['instrument']['instrument']
+
+            if instrument == 'miri':
+                offaxis_x, offaxis_y = offaxis_miri
+            elif instrument == 'nircam':
+                offaxis_x, offaxis_y = offaxis_nircam
 
             if verbose: print('--> Observation {}/{} // {}_{}'.format(i+1, len(self.observation_sequence), scene_name, filt.upper()))
 
