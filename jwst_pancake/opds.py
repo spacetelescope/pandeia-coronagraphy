@@ -798,9 +798,13 @@ class OTE_WFE_Drift_Model(OTE_Linear_Model_WSS):
         islew = np.where(slew_angles[1:] - slew_angles[:-1] != 0)[0] + 1
         islew = np.concatenate(([0], islew))
 
+
         hdul = fits.HDUList()
         for i in range(nz):
-            if i<islew[1]:
+            if len(islew) == 1:
+                #There is no change in slew angle
+                ang1 = ang2 = slew_angles[0] 
+            elif i<islew[1]:
                 ang1 = ang2 = slew_angles[i]
             else:
                 if i in islew:

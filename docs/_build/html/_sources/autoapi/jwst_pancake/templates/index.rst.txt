@@ -1,0 +1,6 @@
+:py:mod:`jwst_pancake.templates`
+================================
+
+.. py:module:: jwst_pancake.templates
+
+

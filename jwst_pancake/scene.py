@@ -185,7 +185,7 @@ class Scene():
         plt.show()
 
 
-def create_SGD(ta_error=False, stepsize=20.e-3, pattern_name=None, sim_num=0):
+def create_SGD(ta_error=False, fsm_error='default', stepsize=20.e-3, pattern_name=None, sim_num=0):
     '''
     Create small grid dither pointing set. There are two
     ways to specify dither patterns:
@@ -286,11 +286,15 @@ def create_SGD(ta_error=False, stepsize=20.e-3, pattern_name=None, sim_num=0):
         ta_x, ta_y = get_ta_error(error=ta_error)
     elif ta_error=='none':
         ta_x, ta_y = 0., 0.
+        fsm_error = 'none'
+    else:
+        raise ValueError('Target Acquisition (ta_error) string not recognised, options are "random", "saved", or "none", or user specified values.')
     
     sgds = []
     for i, (sx, sy) in enumerate(pointings):
         if i > 0:
-            errx, erry = get_fsm_error()
+            print('HERE')
+            errx, erry = get_fsm_error(error=fsm_error)
             offset_x = sx + errx + ta_x
             offset_y = sy + erry + ta_y
         else:
@@ -311,5 +315,8 @@ def get_fsm_error(error='default'):
     '''
     if error == 'default':
         error = 2e-3
+    elif error == 'none':
+        error = 0.
+
     return np.random.normal(loc=0.,scale=error,size=2)
 

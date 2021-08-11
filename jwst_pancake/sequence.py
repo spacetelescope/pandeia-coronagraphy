@@ -140,11 +140,15 @@ class Sequence():
         pancake_options.on_the_fly_PSFs = on_the_fly_PSFs
         pancake_options.cache = cache 
 
-        if cache_path == 'default':
-            cache_path = os.getcwd() + '/PSF_CACHE/'
-        if not os.path.exists(cache_path):
-            os.makedirs(cache_path)
+        if cache != 'none':
+            if cache_path == 'default':
+                cache_path = os.getcwd() + '/PSF_CACHE/'
+            if not os.path.exists(cache_path):
+                os.makedirs(cache_path)
+        else:
+            cache_path = None
         pancake_options.cache_path = cache_path
+
 
         #Create the HDUList for saving our results to. 
         primary_header = fits.Header()

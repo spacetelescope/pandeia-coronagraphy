@@ -910,6 +910,9 @@ def contrast_curve(pancake_results, target, references=None, subtraction='ADI', 
 		raise ValueError("Specified subtraction method '{}' not valid, possible methods are: {}".format(subtraction, ', '.join(sub_methods)))
 	if subtraction in ['RDI', 'RDI+ADI', 'ADI+RDI'] and references == None:
 		raise ValueError("Must identify reference scene observations through the 'references' argument.")
+	if subtraction == 'ADI' and references != None:
+		if verbose: print('Specified reference scenes will not be used for ADI subtraction!')
+		references = None
 
 	# Check the output directory exists, if not then create it
 	if not os.path.exists(outputdir):
