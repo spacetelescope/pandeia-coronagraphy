@@ -10,8 +10,10 @@ Hello World!
 
 .. toctree::
    :maxdepth: 2
-   :caption: Contents:
 
+   Installation
+   Basic Tutorial
+   Advanced Use Cases
 
 
 Indices and tables

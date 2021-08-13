@@ -241,7 +241,7 @@ def extract_simulated_images(pancake_results, observations, primary_sources, all
 
 					# Grab X and Y offsets of the primary source.
 					# NOTE: Y offset must have its sign reversed due to differences between Pandeia scene construction and analysis of the image arrays
-					xoff = head['S{}XOFF{}'.format(primary_source_id, j+1)] / pixel_scale
+					xoff = head['S{}XOFF{}'.format(primary_source_id, j+1)] / pixel_scale 
 					yoff = -head['S{}YOFF{}'.format(primary_source_id, j+1)] / pixel_scale
 					raw_centers = np.array(image.shape) / 2.0
 
@@ -389,8 +389,8 @@ def process_simulations(pancake_results, target, target_obs, filt, mask, primary
 	inner_working_angle = 0#.5*lambda_d_pixel
 	outer_working_angle = int(np.sqrt(2*(target_extracted['images'][0].shape[0]/2)**2))  #Go right to the corners
 
+
 	##### Create the KLIP target dataset
-	target_extracted['pas'] = target_extracted['pas']
 	target_dataset = Instrument.GenericData(target_extracted['images'], target_extracted['centers'], IWA=inner_working_angle, parangs=target_extracted['pas'], filenames=target_extracted['filenames'])
 	target_dataset.OWA = outer_working_angle
 
@@ -1000,7 +1000,7 @@ def contrast_curve(pancake_results, target, references=None, subtraction='ADI', 
 			if verbose:	print('--> Performing KLIP Subtraction')
 			parallelized.klip_dataset(processed['target_dataset'], outputdir=outputdir, fileprefix=true_save_prefix, annuli=klip_annuli, subsections=klip_subsections, numbasis=klip_numbasis, mode=subtraction, psf_library=processed['psflib'], movement=klip_movement, verbose=False)
 			#This function doesn't return anything. Instead, all information is saved to a FITS file.  
-			subtracted_hdu_file = outputdir + "{}-KLmodes-all.fits".format(true_save_prefix) 
+			subtracted_hdu_file = outputdir + "{}-KLmodes-all.fits".format(true_save_prefix)
 
 			# Get some information on the sources in our scene. 
 			source_props = get_source_properties(pancake_results[target_obs[0]], primary_sources[0])

@@ -293,7 +293,6 @@ def create_SGD(ta_error=False, fsm_error='default', stepsize=20.e-3, pattern_nam
     sgds = []
     for i, (sx, sy) in enumerate(pointings):
         if i > 0:
-            print('HERE')
             errx, erry = get_fsm_error(error=fsm_error)
             offset_x = sx + errx + ta_x
             offset_y = sy + erry + ta_y
