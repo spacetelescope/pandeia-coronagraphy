@@ -250,7 +250,7 @@ def read_bandpass(bandpass):
             
             Bandpass = SpectralElement(Empirical1D, points=bandpass_wave, lookup_table=bandpass_throughput)
     except:
-        raise ValueError('Input normalisation bandpass not recognised. Currently supported filters are: "2mass_j", "2mass_h", "2mass_ks", "wise_w1", "wise_w2", "wise_w3", "wise_w4", "bessel_j", "bessel_h", "bessel_k", "cousins_r", "cousins_i", "johnson_u", "johnson_b", "johnson_v", "johnson_r", "johnson_i", "johnson_j", "johnson_k", {}, {}.').format(', '.join(nircam_filters), ', '.join(miri_filters))
+        raise ValueError('Input normalisation bandpass not recognised. Currently supported filters are: "2mass_j", "2mass_h", "2mass_ks", "wise_w1", "wise_w2", "wise_w3", "wise_w4", "bessel_j", "bessel_h", "bessel_k", "cousins_r", "cousins_i", "johnson_u", "johnson_b", "johnson_v", "johnson_r", "johnson_i", "johnson_j", "johnson_k", {}, {}.'.format(', '.join(nircam_filters), ', '.join(miri_filters)))
 
     return Bandpass
 

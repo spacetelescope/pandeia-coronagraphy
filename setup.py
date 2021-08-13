@@ -12,7 +12,7 @@ from os import path
 from sys import version_info
 
 here = path.abspath(path.dirname(__file__))
-NAME = 'jwst_pancake'
+NAME = 'pancake'
 
 python_major = version_info[0]
 if python_major >= 3:
