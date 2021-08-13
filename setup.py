@@ -29,7 +29,7 @@ with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
     long_description = f.read()
 
 # Get version
-with open(path.join(here, NAME, 'VERSION'), encoding='utf-8') as f:
+with open(path.join(here, NAME, 'VERSION.txt'), encoding='utf-8') as f:
     version = f.read().strip()
 
 setup(
@@ -80,7 +80,7 @@ setup(
     # You can just specify the packages manually here if your project is
     # simple. Or you can use find_packages().
     packages=find_packages(),
-    package_data={'pancake.templates' : ['*.json'], 'pancake' : ['VERSION'], 'pancake.resources' : ['*']},
+    package_data={'pancake.templates' : ['*.json'], 'pancake' : ['VERSION.txt'], 'pancake.resources' : ['*']},
 
     # Alternatively, if you want to distribute just a my_module.py, uncomment
     # this:

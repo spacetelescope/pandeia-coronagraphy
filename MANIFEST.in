@@ -1,5 +1,5 @@
 include README.rst
-include VERSION
+include VERSION.txt
 
 recursive-include pancake/templates *.json
 recursive-include pancake/resources *
