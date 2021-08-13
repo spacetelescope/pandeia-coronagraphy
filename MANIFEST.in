@@ -1,3 +1,5 @@
 include README.rst
+include VERSION
 
-recursive-include pandeia_coronagraphy/templates *.json
+recursive-include pancake/templates *.json
+recursive-include pancake/resources *
