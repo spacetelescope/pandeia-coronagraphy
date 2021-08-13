@@ -20,6 +20,10 @@ import pyklip.rdi as rdi
 import pyklip.fakes as fakes
 
 
+# Getting erros when trying to use multiprocessing with pyKLIP
+# Disable using the below
+parallelized.debug = True
+
 ##############################
 # DISCLAIMER 
 # Many functions in this file are heavily inspired by and adapted from the work of Jea Adams on ExoPix.
