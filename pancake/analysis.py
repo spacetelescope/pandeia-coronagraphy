@@ -22,7 +22,7 @@ import pyklip.fakes as fakes
 
 # Getting erros when trying to use multiprocessing with pyKLIP
 # Disable using the below
-#parallelized.debug = True
+parallelized.debug = True
 
 ##############################
 # DISCLAIMER 
@@ -483,8 +483,7 @@ def get_companion_mask(companion_xy, mask_dataset, mask_psflib, offaxis_psf_stam
 	# Perform KLIP on the new images. 
 	fileprefix = "FOR_MASKING" #Adjustable if necessary
 	filesuffix = "-KLmodes-all.fits" #Don't adjust
-	if __name__ == '__main__':
-		parallelized.klip_dataset(mask_dataset, outputdir=outputdir, fileprefix=fileprefix, annuli=annuli, subsections=subsections, numbasis=numbasis, mode=subtraction, psf_library=mask_psflib, movement=movement, verbose=False)
+	parallelized.klip_dataset(mask_dataset, outputdir=outputdir, fileprefix=fileprefix, annuli=annuli, subsections=subsections, numbasis=numbasis, mode=subtraction, psf_library=mask_psflib, movement=movement, verbose=False)
 
 	# Open the KLIP file and read back in the subtracted image
 	injected_file = "{}/{}{}".format(outputdir, fileprefix, filesuffix)
@@ -727,8 +726,7 @@ def compute_contrast(subtracted_hdu_file, filt, mask, offaxis_psf_stamp, offaxis
 			# Now want to run KLIP on these planet injected images
 			fileprefix = "FAKE_INJECTED_{}".format(num_pas) #Adjustable if necessary
 			filesuffix = "-KLmodes-all.fits" #Don't adjust
-			if __name__ == '__main__':
-				parallelized.klip_dataset(input_dataset, outputdir=outputdir, fileprefix=fileprefix, annuli=annuli, subsections=subsections, numbasis=numbasis, mode=subtraction, psf_library=input_psflib, movement=movement, verbose=False)
+			parallelized.klip_dataset(input_dataset, outputdir=outputdir, fileprefix=fileprefix, annuli=annuli, subsections=subsections, numbasis=numbasis, mode=subtraction, psf_library=input_psflib, movement=movement, verbose=False)
 	
 			#Reopen produced file from pyKLIP
 			injected_file = "{}{}{}".format(outputdir, fileprefix, filesuffix)
@@ -1004,8 +1002,7 @@ def contrast_curve(pancake_results, target, references=None, subtraction='ADI', 
 
 			### Subtraction routine
 			if verbose:	print('--> Performing KLIP Subtraction')
-			if __name__ == '__main__':
-				parallelized.klip_dataset(processed['target_dataset'], outputdir=outputdir, fileprefix=true_save_prefix, annuli=klip_annuli, subsections=klip_subsections, numbasis=klip_numbasis, mode=subtraction, psf_library=processed['psflib'], movement=klip_movement, verbose=False)
+			parallelized.klip_dataset(processed['target_dataset'], outputdir=outputdir, fileprefix=true_save_prefix, annuli=klip_annuli, subsections=klip_subsections, numbasis=klip_numbasis, mode=subtraction, psf_library=processed['psflib'], movement=klip_movement, verbose=False)
 			#This function doesn't return anything. Instead, all information is saved to a FITS file.  
 			subtracted_hdu_file = outputdir + "{}-KLmodes-all.fits".format(true_save_prefix)
 
