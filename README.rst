@@ -8,9 +8,11 @@ Pandeia-Coronagraphy
 Installation
 ----
 
-It is highly recommended that you begin by installing `AstroConda <http://astroconda.readthedocs.io/en/latest/installation.html#install-astroconda>`_ (with python 3.x) and then follow these installation `instructions <https://jwst-docs.stsci.edu/display/JPP/JWST+ETC+Coding+Tutorial>`_ to install the Pandeia engine and the required reference files. Once Pandeia is set up, the following command will install this package:
+It is highly recommended that you begin by creating a new environment with `stenv <https://github.com/spacetelescope/stenv>`_ to install the Pandeia engine and the required reference files. Once Pandeia is set up, the following command will install this package:
 
- ``pip install git+git://github.com/spacetelescope/pandeia-coronagraphy.git``
+.. code-block:: shell
+
+  pip install git+git://github.com/spacetelescope/pandeia-coronagraphy.git
 
 _____
 
@@ -18,32 +20,35 @@ Alternatively, follow these step-by-step instructions:
 
 1. If you don't already have Anaconda or Miniconda installed, download and install the Python 3 version `here <https://conda.io/miniconda.html>`_.
 
-2. Add the AstroConda channel to your Conda channels: 
-
- ``conda config --add channels http://ssb.stsci.edu/astroconda``
-
-3. Create a conda environment with the STScI software stack:
+2. Create a conda environment with the STScI software stack:
  
- ``conda create -n astroconda stsci python=3``
+.. code-block:: shell
 
-4. Activate this environment with ``source activate astroconda``. (NB: Conda is only compatible with a BASH shell.)
+  conda env create -n pandeia-coronography-environment -f https://raw.githubusercontent.com/spacetelescope/stenv/main/stenv-latest.yml
+  conda activate pandeia-coronography-environment
 
-5. Install the Pandeia engine following its `instructions on JDox <https://jwst-docs.stsci.edu/jwst-exposure-time-calculator-overview/jwst-etc-pandeia-engine-tutorial/installing-pandeia>`_, in particular with this command: ``pip install pandeia.engine``. (You *should* already have the Pysynphot package installed at this point. If you don't, install it with ``pip install pysynphot`` or ``conda install pysynphot``. You can generate a list of installed packages with ``conda list``.)
+3. Install the Pandeia engine following its `instructions on JDox <https://jwst-docs.stsci.edu/jwst-exposure-time-calculator-overview/jwst-etc-pandeia-engine-tutorial/installing-pandeia>`_
 
-6. Download and install the matching Pandeia data files and the PySynphot data files. See the `instructions on JDox <https://jwst-docs.stsci.edu/jwst-exposure-time-calculator-overview/jwst-etc-pandeia-engine-tutorial/installing-pandeia#InstallingPandeia-DataFiles>`_ for links to current versions of these files.
+.. code-block:: shell
 
-7. Add the following lines to your ~/.bashrc file (and ``source`` it after modifying):
+  pip install pandeia.engine
 
- .. code-block:: bash
+4. Download and install the matching Pandeia data files and the PySynphot data files. See the `instructions on JDox <https://jwst-docs.stsci.edu/jwst-exposure-time-calculator-overview/jwst-etc-pandeia-engine-tutorial/installing-pandeia#InstallingPandeia-DataFiles>`_ for links to current versions of these files.
 
-	export pandeia_refdata=/path/to/pandeia/data/directory
-	export PYSYN_CDBS=/path/to/cdbs/directory
+5. Add the following lines to your ``~/.bashrc`` file (and ``source`` it after modifying):
+
+.. code-block:: shell
+
+  export pandeia_refdata=/path/to/pandeia/data/directory
+  export PYSYN_CDBS=/path/to/cdbs/directory
  
-8. Finally, install the pandeia-coronagraphy package:
+6. Finally, install the ``pandeia-coronagraphy`` package:
 
- ``pip install git+git://github.com/spacetelescope/pandeia-coronagraphy.git``
+.. code-block:: shell
 
-9. (Optional, but *highly* recommended) Install `WebbPSF <https://pythonhosted.org/webbpsf/index.html>`_ with ``conda install webbpsf``. This is required only if you are interested in using higher-fidelity PSFs in your calculations; otherwise, the Pandeia engine relies on interpolations of a bundled library of precomputed PSFs. This functionality is documented `here <https://github.com/spacetelescope/pandeia-coronagraphy/blob/master/notebooks/miri_photon_noise_and_contrast.ipynb>`_ and `here <https://github.com/spacetelescope/pandeia-coronagraphy/blob/master/notebooks/nircam_small_grid_dither.ipynb>`_.
+  pip install git+git://github.com/spacetelescope/pandeia-coronagraphy.git
+
+7. (Optional, but *highly* recommended) Install `WebbPSF <https://pythonhosted.org/webbpsf/index.html>`_ with ``conda install webbpsf``. This is required only if you are interested in using higher-fidelity PSFs in your calculations; otherwise, the Pandeia engine relies on interpolations of a bundled library of precomputed PSFs. This functionality is documented `here <https://github.com/spacetelescope/pandeia-coronagraphy/blob/master/notebooks/miri_photon_noise_and_contrast.ipynb>`_ and `here <https://github.com/spacetelescope/pandeia-coronagraphy/blob/master/notebooks/nircam_small_grid_dither.ipynb>`_.
 
 Installing PySynphot Data Files
 ----
